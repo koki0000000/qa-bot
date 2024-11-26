@@ -39,7 +39,7 @@ def search_manual(question):
 
 def ask_bot(question):
     response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "あなたはマニュアルに基づいて回答するサポートボットです。"},
             {"role": "user", "content": question}
