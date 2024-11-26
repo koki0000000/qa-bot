@@ -1,13 +1,35 @@
 import streamlit as st
 import openai
 import pandas as pd
+import os
+
+# デバッグ用: 現在のディレクトリとファイル一覧を表示
+st.write("Current Directory:", os.getcwd())
+st.write("Files in Directory:", os.listdir())
 
 # OpenAI APIキーを環境変数から取得
-import os
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # マニュアルデータを読み込み
-manual_data = pd.read_csv('manual.csv')
+def load_manual():
+    if os.path.exists('manual.csv'):
+        try:
+            data = pd.read_csv('manual.csv')
+            if data.empty:
+                st.error("manual.csv が空です。データを追加してください。")
+                return pd.DataFrame(columns=['質問', '回答'])
+            return data
+        except pd.errors.EmptyDataError:
+            st.error("manual.csv にデータがありません。")
+            return pd.DataFrame(columns=['質問', '回答'])
+        except Exception as e:
+            st.error(f"manual.csv の読み込み中にエラーが発生しました: {e}")
+            return pd.DataFrame(columns=['質問', '回答'])
+    else:
+        st.error("manual.csv が見つかりません。")
+        return pd.DataFrame(columns=['質問', '回答'])
+
+manual_data = load_manual()
 
 def search_manual(question):
     for index, row in manual_data.iterrows():
