@@ -3,10 +3,6 @@ import openai
 import pandas as pd
 import os
 
-# デバッグ用: 現在のディレクトリとファイル一覧を表示
-st.write("Current Directory:", os.getcwd())
-st.write("Files in Directory:", os.listdir())
-
 # OpenAI APIキーを環境変数から取得
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -14,7 +10,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 def load_manual():
     if os.path.exists('manual.csv'):
         try:
-            data = pd.read_csv('manual.csv')
+            data = pd.read_csv('manual.csv', encoding='utf-8')
             if data.empty:
                 st.error("manual.csv が空です。データを追加してください。")
                 return pd.DataFrame(columns=['質問', '回答'])
@@ -39,32 +35,36 @@ def search_manual(question):
 
 def ask_bot(question, language):
     # OpenAIに質問を送信し、指定された言語で回答を取得
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": f"あなたは{language}で質問に答えるサポートボットです。"},
-            {"role": "user", "content": question}
-        ]
-    )
-    return response['choices'][0]['message']['content']
+    system_message = f"You are a support bot that answers questions in {language}."
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": question}
+            ]
+        )
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        return f"An error occurred while contacting OpenAI: {e}"
 
 # Streamlitアプリの設定
-st.title("Q&Aボット")
-st.write("部下の質問に答えるためのボットです。質問を入力してください。")
+st.title("Q&A Bot")
+st.write("This bot answers your questions. Please enter your question below.")
 
 # 言語選択の追加
-languages = ["日本語", "英語", "中国語", "スペイン語", "フランス語", "ドイツ語", "その他"]
-selected_language = st.selectbox("言語を選択してください:", languages)
+languages = ["English", "Filipino","Bahasa Indonesia", "Español", "Português", "日本語", "other"]
+selected_language = st.selectbox("Please select your language:", languages)
 
-question = st.text_input("質問を入力してください:")
+question = st.text_input("Enter your question:")
 
-if st.button("送信"):
+if st.button("Submit"):
     if question:
         manual_response = search_manual(question)
         if manual_response:
-            st.success(f"マニュアル回答: {manual_response}")
+            st.success(f"Manual Answer: {manual_response}")
         else:
             ai_response = ask_bot(question, selected_language)
-            st.info(f"AIからの回答: {ai_response} ※マニュアルにない質問です。")
+            st.info(f"AI Answer: {ai_response} ※This question was not found in the manual.")
     else:
-        st.warning("質問を入力してください。")
+        st.warning("Please enter a question.")
