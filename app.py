@@ -12,54 +12,61 @@ st.markdown(
     <style>
     /* Overall background color */
     .stApp {
-        background-color: #ffffff;
+        background-color: #000000;
         font-family: 'Helvetica Neue', sans-serif;
     }
     /* Title style */
     h1 {
-        color: #2c3e50;
+        color: #FFFFFF;
         text-align: center;
         margin-bottom: 20px;
     }
     /* Sidebar style */
     .css-1d391kg {
-        background-color: #34495e;
+        background-color: #1a1a1a;
     }
     .css-1d391kg .css-hxt7ib {
-        color: #ecf0f1;
+        color: #FFFFFF;
     }
     /* Input field style */
     .stTextInput, .stTextArea {
         margin-bottom: 20px;
     }
+    .stTextInput>div>div>input, .stTextArea textarea {
+        background-color: #333333;
+        color: #FFFFFF;
+    }
     /* Button style */
     .stButton>button {
-        background-color: #2980b9;
-        color: #ecf0f1;
+        background-color: #0066cc;
+        color: #FFFFFF;
         border-radius: 5px;
         padding: 10px 20px;
         font-size: 16px;
         margin-top: 10px;
+        border: none;
     }
     .stButton>button:hover {
-        background-color: #3498db;
+        background-color: #0052a3;
     }
     /* Question and answer style */
     .question, .answer {
-        background-color: #ecf0f1;
+        background-color: #1a1a1a;
         padding: 15px;
         border-radius: 5px;
         margin-bottom: 10px;
+        color: #FFFFFF;
     }
     .question {
-        border-left: 5px solid #2980b9;
+        border-left: 5px solid #0066cc;
     }
     .answer {
-        border-left: 5px solid #27ae60;
+        border-left: 5px solid #00cc66;
     }
     /* Feedback style */
     .stRadio>div {
         flex-direction: row;
+        color: #FFFFFF;
     }
     .stRadio>div>label {
         margin-right: 10px;
@@ -67,6 +74,11 @@ st.markdown(
     /* Dataframe style */
     .stDataFrame {
         margin-top: 20px;
+        color: #FFFFFF;
+    }
+    /* Adjust text color globally */
+    .css-1e5imcs, .css-1v3fvcr {
+        color: #FFFFFF;
     }
     </style>
     """,
