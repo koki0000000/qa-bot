@@ -69,15 +69,14 @@ if page == "User":
                 st.session_state['history'].append({'question': question, 'answer': ai_response})
 
                 # Collect feedback
-                feedback_options = ["Yes", "No"]
-                feedback = st.radio(
+                feedback_options = ["Please select", "Yes", "No"]
+                feedback = st.selectbox(
                     "Was this answer helpful?",
                     feedback_options,
-                    index=None,
                     key=f"feedback_{len(st.session_state['history'])}"
                 )
 
-                if feedback:
+                if feedback != "Please select":
                     st.session_state['history'][-1]['feedback'] = feedback
                 else:
                     st.session_state['history'][-1]['feedback'] = "Not Rated"
@@ -128,22 +127,21 @@ elif page == "Admin":
         st.markdown("## Current Manual")
         st.dataframe(manual_data)
 
+        # Function to clear inputs
+        def clear_inputs():
+            st.session_state["new_question"] = ""
+            st.session_state["new_answer"] = ""
+
         # Add new Q&A
         st.markdown("## Add New Q&A")
         new_question = st.text_input("Enter a new question", key="new_question")
         new_answer = st.text_area("Enter a new answer", key="new_answer")
-        if st.button("Add Q&A"):
+        if st.button("Add Q&A", on_click=clear_inputs):
             if new_question and new_answer:
                 new_row = pd.DataFrame({'質問': [new_question], '回答': [new_answer]})
                 manual_data = pd.concat([manual_data, new_row], ignore_index=True)
                 manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
                 st.success("The new Q&A has been added.")
-
-                # Clear input fields
-                st.session_state["new_question"] = ""
-                st.session_state["new_answer"] = ""
-                # Rerun the app to update the manual display
-                st.experimental_rerun()
             else:
                 st.warning("Please enter both a question and an answer.")
 
