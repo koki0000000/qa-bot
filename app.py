@@ -181,7 +181,7 @@ if page == "User":
                         'answer': ai_response,
                         'feedback': "Not Rated"
                     }
-                    question_data = question_data.append(new_row, ignore_index=True)
+                    question_data = pd.concat([question_data, pd.DataFrame([new_row])], ignore_index=True)
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
 
                 save_question()
