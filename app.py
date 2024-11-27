@@ -32,16 +32,16 @@ if 'history' not in st.session_state:
     st.session_state['history'] = []
 
 # ページ選択（ユーザー用と管理者用）
-page = st.sidebar.selectbox("ページを選択してください", ["User", "Admin"])
+page = st.sidebar.selectbox("Select your role", ["User", "Admin"])
 
-if page == "ユーザー":
+if page == "User":
     # Streamlitアプリの設定
     st.title("Q&A Bot")
-    st.write("このボットはマニュアルに基づいて質問に回答します。質問を入力してください。")
+    st.write("This bot answers your questions based on our manual in any languages.")
 
-    question = st.text_input("質問を入力してください:")
+    question = st.text_input("Enter your questions:")
 
-    if st.button("送信"):
+    if st.button("Submit"):
         if question:
             # マニュアルの内容を結合してテキスト化
             manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
@@ -63,15 +63,15 @@ if page == "ユーザー":
                     ]
                 )
                 ai_response = response['choices'][0]['message']['content']
-                st.success(f"回答: {ai_response}")
+                st.success(f"Answer: {ai_response}")
 
                 # 質問と回答を履歴に追加
                 st.session_state['history'].append({'question': question, 'answer': ai_response})
 
                 # フィードバックの収集
-                feedback_options = ["はい", "いいえ"]
+                feedback_options = ["Yes", "No"]
                 feedback = st.radio(
-                    "この回答は役に立ちましたか？", feedback_options, index=-1, key=f"feedback_{len(st.session_state['history'])}"
+                    "Was this answer usuful?", feedback_options, index=-1, key=f"feedback_{len(st.session_state['history'])}"
                 )
 
                 if feedback:
@@ -115,11 +115,11 @@ if page == "ユーザー":
 
     save_feedback(st.session_state['history'])
 
-elif page == "管理者":
+elif page == "Admin":
     # 管理者認証
-    admin_password = st.sidebar.text_input("パスワードを入力してください", type="password")
+    admin_password = st.sidebar.text_input("Enter your password", type="password")
     if admin_password == "koki":  # パスワードを設定
-        st.success("管理者ページにアクセスしました。")
+        st.success("Welcome to Admin Page")
 
         # マニュアルの表示
         st.markdown("## 現在のマニュアル")
