@@ -78,16 +78,17 @@ if page == "User":
     for idx, qa in enumerate(st.session_state['history']):
         st.markdown(f"**Question {idx+1}:** {qa['question']}")
         st.markdown(f"**Answer {idx+1}:** {qa['answer']}")
-
+        
         if qa['feedback'] == "Not Rated":
-            feedback_options = ["Please select", "Yes", "No"]
-            feedback = st.selectbox(
-                f"Was this answer helpful? (Question {idx+1})",
-                feedback_options,
-                key=f"feedback_{idx}"
-            )
-            if feedback != "Please select":
-                qa['feedback'] = feedback
+            with st.expander(f"Provide feedback for Question {idx+1}"):
+                feedback = st.radio(
+                    "Was this answer helpful?",
+                    ["Yes", "No"],
+                    key=f"feedback_{idx}"
+                )
+                if st.button("Submit Feedback", key=f"submit_feedback_{idx}"):
+                    qa['feedback'] = feedback
+                    st.success("Thank you for your feedback!")
         else:
             st.markdown(f"**Feedback {idx+1}:** {qa['feedback']}")
 
@@ -129,13 +130,13 @@ elif page == "Admin":
 
         # 入力欄をクリアする関数を定義
         def clear_inputs():
-            st.session_state["new_question"] = ""
-            st.session_state["new_answer"] = ""
+            st.session_state["new_question_value"] = ""
+            st.session_state["new_answer_value"] = ""
 
         # 新しいQ&Aの追加
         st.markdown("## Add New Q&A")
-        new_question = st.text_input("Enter a new question", key="new_question")
-        new_answer = st.text_area("Enter a new answer", key="new_answer")
+        new_question = st.text_input("Enter a new question", key="new_question", value=st.session_state.get("new_question_value", ""))
+        new_answer = st.text_area("Enter a new answer", key="new_answer", value=st.session_state.get("new_answer_value", ""))
         if st.button("Add Q&A"):
             if new_question and new_answer:
                 new_row = pd.DataFrame({'質問': [new_question], '回答': [new_answer]})
