@@ -32,7 +32,7 @@ if 'history' not in st.session_state:
     st.session_state['history'] = []
 
 # ページ選択（ユーザー用と管理者用）
-page = st.sidebar.selectbox("ページを選択してください", ["ユーザー", "管理者"])
+page = st.sidebar.selectbox("ページを選択してください", ["User", "Admin"])
 
 if page == "ユーザー":
     # Streamlitアプリの設定
@@ -49,17 +49,17 @@ if page == "ユーザー":
             # OpenAIに質問とマニュアルを送信して回答を取得
             try:
                 response = openai.ChatCompletion.create(
-                    model="gpt-4",
+                    model="gpt-4o",
                     messages=[
                         {
                             "role": "system",
                             "content": (
-                                "あなたはユーザーの質問に対して、与えられたマニュアルの内容に基づいて回答するアシスタントです。"
-                                "回答はユーザーの質問と同じ言語で行ってください。"
-                                "マニュアルにない情報は提供しないでくださいが、マニュアルの知識を使って柔軟に回答してください。"
+                                "You are an assistant who answers the user's questions based solely on the provided manual."
+                                " Please answer in the same language as the user's question."
+                                " Do not provide information not included in the manual, but use the knowledge from the manual to answer flexibly."
                             )
                         },
-                        {"role": "user", "content": f"マニュアル:\n{manual_text}\n\nユーザーの質問:\n{question}"}
+                        {"role": "user", "content": f"Manual:\n{manual_text}\n\nUser's question:\n{question}"}
                     ]
                 )
                 ai_response = response['choices'][0]['message']['content']
@@ -69,10 +69,15 @@ if page == "ユーザー":
                 st.session_state['history'].append({'question': question, 'answer': ai_response})
 
                 # フィードバックの収集
+                feedback_options = ["はい", "いいえ"]
                 feedback = st.radio(
-                    "この回答は役に立ちましたか？", ("はい", "いいえ"), key=f"feedback_{len(st.session_state['history'])}"
+                    "この回答は役に立ちましたか？", feedback_options, index=-1, key=f"feedback_{len(st.session_state['history'])}"
                 )
-                st.session_state['history'][-1]['feedback'] = feedback
+
+                if feedback:
+                    st.session_state['history'][-1]['feedback'] = feedback
+                else:
+                    st.session_state['history'][-1]['feedback'] = "未評価"
 
             except openai.error.OpenAIError as e:
                 st.error(f"OpenAIへのリクエスト中にエラーが発生しました: {e}")
@@ -113,7 +118,7 @@ if page == "ユーザー":
 elif page == "管理者":
     # 管理者認証
     admin_password = st.sidebar.text_input("パスワードを入力してください", type="password")
-    if admin_password == "your_admin_password":  # パスワードを設定
+    if admin_password == "koki":  # パスワードを設定
         st.success("管理者ページにアクセスしました。")
 
         # マニュアルの表示
@@ -130,6 +135,9 @@ elif page == "管理者":
                 manual_data = pd.concat([manual_data, new_row], ignore_index=True)
                 manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
                 st.success("新しいQ&Aが追加されました。")
+
+                # 入力欄をクリア
+                st.experimental_rerun()
             else:
                 st.warning("質問と回答を入力してください。")
 
@@ -138,11 +146,14 @@ elif page == "管理者":
         if os.path.exists('feedback.csv'):
             try:
                 feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
-                st.dataframe(feedback_data)
-                positive_feedback = feedback_data[feedback_data['feedback'] == 'はい'].shape[0]
-                negative_feedback = feedback_data[feedback_data['feedback'] == 'いいえ'].shape[0]
-                st.markdown(f"**役に立った:** {positive_feedback}件")
-                st.markdown(f"**役に立たなかった:** {negative_feedback}件")
+                if not feedback_data.empty:
+                    st.dataframe(feedback_data)
+                    positive_feedback = feedback_data[feedback_data['feedback'] == 'はい'].shape[0]
+                    negative_feedback = feedback_data[feedback_data['feedback'] == 'いいえ'].shape[0]
+                    st.markdown(f"**役に立った:** {positive_feedback}件")
+                    st.markdown(f"**役に立たなかった:** {negative_feedback}件")
+                else:
+                    st.warning("フィードバックデータがまだありません。")
             except pd.errors.EmptyDataError:
                 st.warning("フィードバックデータがまだありません。")
         else:
