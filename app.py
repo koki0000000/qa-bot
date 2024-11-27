@@ -2,7 +2,6 @@ import streamlit as st
 import openai
 import pandas as pd
 import os
-from difflib import get_close_matches
 
 # OpenAI APIキーを環境変数から取得
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -28,58 +27,108 @@ def load_manual():
 
 manual_data = load_manual()
 
-# 類似質問を検索する関数
-def find_similar_question(question, manual_data, cutoff=0.6):
-    questions = manual_data['質問'].tolist()
-    matches = get_close_matches(question, questions, n=1, cutoff=cutoff)
-    if matches:
-        return matches[0]
-    else:
-        return None
+# 質問履歴をセッション状態で管理
+if 'history' not in st.session_state:
+    st.session_state['history'] = []
 
-def ask_bot(question, language):
-    # OpenAIに質問を送信し、指定された言語で回答を取得
-    system_message = f"You are a support bot that answers questions in {language} based on the provided manual."
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": question}
-            ]
-        )
-        return response['choices'][0]['message']['content']
-    except openai.error.OpenAIError as e:
-        return f"An error occurred while contacting OpenAI: {e}"
-    except Exception as e:
-        return f"An unexpected error occurred: {e}"
+# ページ選択（ユーザー用と管理者用）
+page = st.sidebar.selectbox("ページを選択してください", ["ユーザー", "管理者"])
 
-# Streamlitアプリの設定
-st.title("Q&A Bot")
-st.write("This bot answers your questions based on the provided manual. Please enter your question below.")
+if page == "ユーザー":
+    # Streamlitアプリの設定
+    st.title("Q&A Bot")
+    st.write("このボットはマニュアルに基づいて質問に回答します。質問を入力してください。")
 
-# 言語選択の追加
-languages = ["English", "Filipino", "Bahasa Indonesia", "Español", "Português", "日本語", "Other"]
-selected_language = st.selectbox("Please select your language:", languages)
+    question = st.text_input("質問を入力してください:")
 
-question = st.text_input("Enter your question:")
+    if st.button("送信"):
+        if question:
+            # マニュアルの内容を結合してテキスト化
+            manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
 
-if st.button("Submit"):
-    if question:
-        # 正確な質問の検索
-        manual_response = manual_data.loc[manual_data['質問'].str.lower() == question.lower(), '回答']
-        if not manual_response.empty:
-            st.success(f"Manual Answer: {manual_response.values[0]}")
+            # OpenAIに質問とマニュアルを送信して回答を取得
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "あなたは与えられたマニュアルに基づいてのみ回答するアシスタントです。マニュアルにない情報は提供しないでください。"},
+                        {"role": "user", "content": f"マニュアル:\n{manual_text}\n\nユーザーの質問:{question}"}
+                    ]
+                )
+                ai_response = response['choices'][0]['message']['content']
+                st.success(f"回答: {ai_response}")
+
+                # 質問と回答を履歴に追加
+                st.session_state['history'].append({'question': question, 'answer': ai_response})
+
+                # フィードバックの収集
+                feedback = st.radio("この回答は役に立ちましたか？", ("はい", "いいえ"), key=f"feedback_{len(st.session_state['history'])}")
+                st.session_state['history'][-1]['feedback'] = feedback
+
+            except openai.error.OpenAIError as e:
+                st.error(f"OpenAIへのリクエスト中にエラーが発生しました: {e}")
         else:
-            # 類似質問の検索
-            similar_question = find_similar_question(question, manual_data)
-            if similar_question:
-                similar_answer = manual_data.loc[manual_data['質問'] == similar_question, '回答'].values[0]
-                st.success(f"Similar Question Found: {similar_question}")
-                st.success(f"Manual Answer: {similar_answer}")
+            st.warning("質問を入力してください。")
+
+    # 質問履歴の表示
+    st.markdown("## 質問履歴")
+    for idx, qa in enumerate(st.session_state['history']):
+        st.markdown(f"**質問 {idx+1}:** {qa['question']}")
+        st.markdown(f"**回答 {idx+1}:** {qa['answer']}")
+        st.markdown(f"**フィードバック {idx+1}:** {qa.get('feedback', '未評価')}")
+
+    # フィードバック結果の保存
+    def save_feedback(history):
+        if os.path.exists('feedback.csv'):
+            feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
+        else:
+            feedback_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
+
+        new_data = []
+        for qa in history:
+            if not qa.get('feedback_saved', False):
+                new_data.append({'question': qa['question'], 'answer': qa['answer'], 'feedback': qa.get('feedback', '未評価')})
+                qa['feedback_saved'] = True  # 重複保存を防ぐ
+
+        if new_data:
+            feedback_data = pd.concat([feedback_data, pd.DataFrame(new_data)], ignore_index=True)
+            feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
+
+    save_feedback(st.session_state['history'])
+
+elif page == "管理者":
+    # 管理者認証
+    admin_password = st.sidebar.text_input("パスワードを入力してください", type="password")
+    if admin_password == "Admin":  # パスワードを設定
+        st.success("管理者ページにアクセスしました。")
+
+        # マニュアルの表示
+        st.markdown("## 現在のマニュアル")
+        st.dataframe(manual_data)
+
+        # 新しいQ&Aの追加
+        st.markdown("## 新しいQ&Aを追加")
+        new_question = st.text_input("新しい質問を入力してください")
+        new_answer = st.text_area("新しい回答を入力してください")
+        if st.button("追加"):
+            if new_question and new_answer:
+                new_row = pd.DataFrame({'質問': [new_question], '回答': [new_answer]})
+                manual_data = pd.concat([manual_data, new_row], ignore_index=True)
+                manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                st.success("新しいQ&Aが追加されました。")
             else:
-                # 類似質問も見つからない場合、AIに回答を生成させる
-                ai_response = ask_bot(question, selected_language)
-                st.info(f"AI Answer: {ai_response} ※This question was not found in the manual. Ask koki.")
+                st.warning("質問と回答を入力してください。")
+
+        # フィードバック結果の表示
+        st.markdown("## フィードバック結果の集計")
+        if os.path.exists('feedback.csv'):
+            feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
+            st.dataframe(feedback_data)
+            positive_feedback = feedback_data[feedback_data['feedback'] == 'はい'].shape[0]
+            negative_feedback = feedback_data[feedback_data['feedback'] == 'いいえ'].shape[0]
+            st.markdown(f"**役に立った:** {positive_feedback}件")
+            st.markdown(f"**役に立たなかった:** {negative_feedback}件")
+        else:
+            st.warning("フィードバックデータがまだありません。")
     else:
-        st.warning("Please enter a question.")
+        st.error("パスワードが正しくありません。")
