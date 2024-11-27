@@ -37,11 +37,12 @@ def search_manual(question):
             return row['回答']
     return None
 
-def ask_bot(question):
+def ask_bot(question, language):
+    # OpenAIに質問を送信し、指定された言語で回答を取得
     response = openai.ChatCompletion.create(
-        model="gpt-4o",
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": "あなたはマニュアルに基づいて回答するサポートボットです。"},
+            {"role": "system", "content": f"あなたは{language}で質問に答えるサポートボットです。"},
             {"role": "user", "content": question}
         ]
     )
@@ -51,6 +52,10 @@ def ask_bot(question):
 st.title("Q&Aボット")
 st.write("部下の質問に答えるためのボットです。質問を入力してください。")
 
+# 言語選択の追加
+languages = ["日本語", "英語", "中国語", "スペイン語", "フランス語", "ドイツ語", "その他"]
+selected_language = st.selectbox("言語を選択してください:", languages)
+
 question = st.text_input("質問を入力してください:")
 
 if st.button("送信"):
@@ -59,7 +64,7 @@ if st.button("送信"):
         if manual_response:
             st.success(f"マニュアル回答: {manual_response}")
         else:
-            ai_response = ask_bot(question)
-            st.info(f"AIからの回答: {ai_response}")
+            ai_response = ask_bot(question, selected_language)
+            st.info(f"AIからの回答: {ai_response} ※マニュアルにない質問です。")
     else:
         st.warning("質問を入力してください。")
