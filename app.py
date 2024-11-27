@@ -10,38 +10,63 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 st.markdown(
     """
     <style>
-    /* Background color */
+    /* Overall background color */
     .stApp {
-        background-color: #f5f5f5;
+        background-color: #ffffff;
+        font-family: 'Helvetica Neue', sans-serif;
     }
-    /* Title */
-    .stMarkdown h1 {
+    /* Title style */
+    h1 {
         color: #2c3e50;
+        text-align: center;
+        margin-bottom: 20px;
     }
-    /* Buttons */
+    /* Sidebar style */
+    .css-1d391kg {
+        background-color: #34495e;
+    }
+    .css-1d391kg .css-hxt7ib {
+        color: #ecf0f1;
+    }
+    /* Input field style */
+    .stTextInput, .stTextArea {
+        margin-bottom: 20px;
+    }
+    /* Button style */
     .stButton>button {
-        background-color: #3498db;
-        color: white;
+        background-color: #2980b9;
+        color: #ecf0f1;
+        border-radius: 5px;
+        padding: 10px 20px;
         font-size: 16px;
-        padding: 8px 16px;
         margin-top: 10px;
     }
-    /* Sidebar */
-    .stSidebar {
+    .stButton>button:hover {
+        background-color: #3498db;
+    }
+    /* Question and answer style */
+    .question, .answer {
         background-color: #ecf0f1;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 10px;
     }
-    /* Text inputs */
-    .stTextInput>div>div>input {
-        background-color: #ffffff;
-        color: #2c3e50;
+    .question {
+        border-left: 5px solid #2980b9;
     }
-    /* Dataframes */
+    .answer {
+        border-left: 5px solid #27ae60;
+    }
+    /* Feedback style */
+    .stRadio>div {
+        flex-direction: row;
+    }
+    .stRadio>div>label {
+        margin-right: 10px;
+    }
+    /* Dataframe style */
     .stDataFrame {
-        background-color: #ffffff;
-    }
-    /* Expander */
-    .stExpanderHeader {
-        font-size: 16px;
+        margin-top: 20px;
     }
     </style>
     """,
@@ -55,21 +80,21 @@ def load_manual():
             data = pd.read_csv('manual.csv', encoding='utf-8')
             if data.empty:
                 st.error("The manual.csv file is empty. Please add data.")
-                return pd.DataFrame(columns=['質問', '回答'])
+                return pd.DataFrame(columns=['Question', 'Answer'])
             return data
         except pd.errors.EmptyDataError:
             st.error("The manual.csv file has no data.")
-            return pd.DataFrame(columns=['質問', '回答'])
+            return pd.DataFrame(columns=['Question', 'Answer'])
         except Exception as e:
-            st.error(f"Error loading manual.csv: {e}")
-            return pd.DataFrame(columns=['質問', '回答'])
+            st.error(f"An error occurred while loading manual.csv: {e}")
+            return pd.DataFrame(columns=['Question', 'Answer'])
     else:
         st.error("The manual.csv file was not found.")
-        return pd.DataFrame(columns=['質問', '回答'])
+        return pd.DataFrame(columns=['Question', 'Answer'])
 
 manual_data = load_manual()
 
-# Store manual data in session state
+# Store manual_data in session state
 if 'manual_data' not in st.session_state:
     st.session_state['manual_data'] = manual_data
 else:
@@ -79,7 +104,7 @@ else:
 if 'history' not in st.session_state:
     st.session_state['history'] = []
 
-# Page selection with icons
+# Page selection in the sidebar
 page = st.sidebar.selectbox(
     "Select a page",
     ["User", "Admin"],
@@ -88,8 +113,8 @@ page = st.sidebar.selectbox(
 )
 
 if page == "User":
-    # Streamlit app configuration
-    st.title("Q&A Bot")
+    # App configuration
+    st.title("💬 Q&A Bot")
     st.write("This bot answers your questions based on the manual. Please enter your question below.")
 
     question = st.text_input("Enter your question:")
@@ -116,7 +141,11 @@ if page == "User":
                     ]
                 )
                 ai_response = response['choices'][0]['message']['content']
-                st.success(f"**Answer:** {ai_response}")
+                st.success("The answer has been generated. Please see below.")
+
+                # Display question and answer
+                st.markdown(f"<div class='question'><strong>Question:</strong> {question}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
 
                 # Add question and answer to history
                 st.session_state['history'].append({'question': question, 'answer': ai_response, 'feedback': "Not Rated"})
@@ -126,12 +155,12 @@ if page == "User":
         else:
             st.warning("Please enter a question.")
 
-    # Display question history with newest first
-    st.markdown("## Question History")
+    # Display question history with the newest first
+    st.markdown("## 🕘 Question History")
     for idx, qa in enumerate(reversed(st.session_state['history'])):
         actual_idx = len(st.session_state['history']) - idx - 1
-        st.markdown(f"**Question {actual_idx+1}:** {qa['question']}")
-        st.markdown(f"**Answer {actual_idx+1}:** {qa['answer']}")
+        st.markdown(f"<div class='question'><strong>Question {actual_idx+1}:</strong> {qa['question']}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
 
         if qa['feedback'] == "Not Rated":
             with st.expander(f"Provide feedback for Question {actual_idx+1}"):
@@ -184,10 +213,10 @@ elif page == "Admin":
             st.session_state["new_answer_value"] = ""
 
         # Add new Q&A
-        st.markdown("## Add New Q&A")
+        st.markdown("## ➕ Add New Q&A")
         new_question = st.text_input("Enter a new question", key="new_question", value=st.session_state.get("new_question_value", ""))
         new_answer = st.text_area("Enter a new answer", key="new_answer", value=st.session_state.get("new_answer_value", ""))
-        if st.button("Add Q&A"):
+        if st.button("Add"):
             if new_question and new_answer:
                 new_row = pd.DataFrame({'質問': [new_question], '回答': [new_answer]})
                 st.session_state['manual_data'] = pd.concat([st.session_state['manual_data'], new_row], ignore_index=True)
@@ -203,11 +232,11 @@ elif page == "Admin":
                 st.warning("Please enter both a question and an answer.")
 
         # Display the updated manual data
-        st.markdown("## Current Manual")
+        st.markdown("## 📄 Current Manual")
         st.dataframe(st.session_state['manual_data'])
 
         # Display feedback results
-        st.markdown("## Feedback Summary")
+        st.markdown("## 📊 Feedback Summary")
         if os.path.exists('feedback.csv'):
             try:
                 feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
