@@ -132,6 +132,7 @@ if page == "User":
     # App configuration
     st.title("💬 Q&A Bot")
     st.write("This bot answers your questions based on the manual. Please enter your question below.")
+    st.write("**This is a beta version. Your active feedback would be greatly appreciated! by Koki**")
 
     question = st.text_input("Enter your question:")
 
@@ -224,7 +225,7 @@ if page == "User":
 elif page == "Admin":
     # Admin authentication
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    if admin_password == "koki":  # Set your password
+    if admin_password == "こうき": 
         st.success("Accessed the admin page.")
 
         # Function to clear inputs
