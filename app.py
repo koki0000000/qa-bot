@@ -64,6 +64,10 @@ st.markdown(
         border-left: 5px solid #00cc66;
     }
     /* Feedback style */
+    .feedback-section {
+        margin-top: -10px;
+        margin-bottom: 20px;
+    }
     .stRadio>div {
         flex-direction: row;
         color: #FFFFFF;
@@ -162,6 +166,26 @@ if page == "User":
                 # Add question and answer to history
                 st.session_state['history'].append({'question': question, 'answer': ai_response, 'feedback': "Not Rated"})
 
+                # Save question and answer to 'questions.csv'
+                def save_question():
+                    if os.path.exists('questions.csv'):
+                        try:
+                            question_data = pd.read_csv('questions.csv', encoding='utf-8')
+                        except pd.errors.EmptyDataError:
+                            question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
+                    else:
+                        question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
+
+                    new_row = {
+                        'question': question,
+                        'answer': ai_response,
+                        'feedback': "Not Rated"
+                    }
+                    question_data = question_data.append(new_row, ignore_index=True)
+                    question_data.to_csv('questions.csv', index=False, encoding='utf-8')
+
+                save_question()
+
             except openai.error.OpenAIError as e:
                 st.error(f"An error occurred while contacting OpenAI: {e}")
         else:
@@ -175,43 +199,27 @@ if page == "User":
         st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
 
         if qa['feedback'] == "Not Rated":
-            with st.expander(f"Provide feedback for Question {actual_idx+1}"):
-                feedback = st.radio(
-                    "Was this answer helpful?",
-                    ["Yes", "No"],
-                    key=f"feedback_{actual_idx}"
-                )
-                if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
-                    qa['feedback'] = feedback
-                    st.success("Thank you for your feedback!")
+            # Move feedback section directly under the answer
+            st.markdown("<div class='feedback-section'>", unsafe_allow_html=True)
+            feedback = st.radio(
+                "Was this answer helpful?",
+                ["Yes", "No"],
+                key=f"feedback_{actual_idx}",
+                index=0
+            )
+            if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
+                qa['feedback'] = feedback
+                st.success("Thank you for your feedback!")
+
+                # Update feedback in 'questions.csv'
+                if os.path.exists('questions.csv'):
+                    question_data = pd.read_csv('questions.csv', encoding='utf-8')
+                    mask = (question_data['question'] == qa['question']) & (question_data['answer'] == qa['answer'])
+                    question_data.loc[mask, 'feedback'] = feedback
+                    question_data.to_csv('questions.csv', index=False, encoding='utf-8')
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
-
-    # Save feedback results
-    def save_feedback():
-        if os.path.exists('feedback.csv'):
-            try:
-                feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
-            except pd.errors.EmptyDataError:
-                feedback_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
-        else:
-            feedback_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
-
-        new_data = []
-        for qa in st.session_state['history']:
-            if not qa.get('feedback_saved', False) and qa['feedback'] != "Not Rated":
-                new_data.append({
-                    'question': qa['question'],
-                    'answer': qa['answer'],
-                    'feedback': qa['feedback']
-                })
-                qa['feedback_saved'] = True  # Prevent duplicate saves
-
-        if new_data:
-            feedback_data = pd.concat([feedback_data, pd.DataFrame(new_data)], ignore_index=True)
-            feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-
-    save_feedback()
 
 elif page == "Admin":
     # Admin authentication
@@ -247,22 +255,22 @@ elif page == "Admin":
         st.markdown("## 📄 Current Manual")
         st.dataframe(st.session_state['manual_data'])
 
-        # Display feedback results
-        st.markdown("## 📊 Feedback Summary")
-        if os.path.exists('feedback.csv'):
+        # Display all questions and feedback
+        st.markdown("## 📊 All Questions and Feedback")
+        if os.path.exists('questions.csv'):
             try:
-                feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
-                if not feedback_data.empty:
-                    st.dataframe(feedback_data)
-                    positive_feedback = feedback_data[feedback_data['feedback'] == 'Yes'].shape[0]
-                    negative_feedback = feedback_data[feedback_data['feedback'] == 'No'].shape[0]
+                question_data = pd.read_csv('questions.csv', encoding='utf-8')
+                if not question_data.empty:
+                    st.dataframe(question_data)
+                    positive_feedback = question_data[question_data['feedback'] == 'Yes'].shape[0]
+                    negative_feedback = question_data[question_data['feedback'] == 'No'].shape[0]
                     st.markdown(f"**Helpful:** {positive_feedback}")
                     st.markdown(f"**Not Helpful:** {negative_feedback}")
                 else:
-                    st.warning("There is no feedback data yet.")
+                    st.warning("There are no questions yet.")
             except pd.errors.EmptyDataError:
-                st.warning("There is no feedback data yet.")
+                st.warning("There are no questions yet.")
         else:
-            st.warning("There is no feedback data yet.")
+            st.warning("There are no questions yet.")
     else:
         st.error("Incorrect password.")
