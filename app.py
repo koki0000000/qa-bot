@@ -3,50 +3,50 @@ import openai
 import pandas as pd
 import os
 
-# OpenAI APIキーを環境変数から取得
+# OpenAI API key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# マニュアルデータを読み込み
+# Load manual data
 def load_manual():
     if os.path.exists('manual.csv'):
         try:
             data = pd.read_csv('manual.csv', encoding='utf-8')
             if data.empty:
-                st.error("manual.csv が空です。データを追加してください。")
+                st.error("The manual.csv file is empty. Please add data.")
                 return pd.DataFrame(columns=['質問', '回答'])
             return data
         except pd.errors.EmptyDataError:
-            st.error("manual.csv にデータがありません。")
+            st.error("The manual.csv file has no data.")
             return pd.DataFrame(columns=['質問', '回答'])
         except Exception as e:
-            st.error(f"manual.csv の読み込み中にエラーが発生しました: {e}")
+            st.error(f"Error loading manual.csv: {e}")
             return pd.DataFrame(columns=['質問', '回答'])
     else:
-        st.error("manual.csv が見つかりません。")
+        st.error("The manual.csv file was not found.")
         return pd.DataFrame(columns=['質問', '回答'])
 
 manual_data = load_manual()
 
-# 質問履歴をセッション状態で管理
+# Initialize session state for history
 if 'history' not in st.session_state:
     st.session_state['history'] = []
 
-# ページ選択（ユーザー用と管理者用）
-page = st.sidebar.selectbox("Select your role", ["User", "Admin"])
+# Page selection (User and Admin)
+page = st.sidebar.selectbox("Select a page", ["User", "Admin"])
 
 if page == "User":
-    # Streamlitアプリの設定
+    # Streamlit app configuration
     st.title("Q&A Bot")
-    st.write("This bot answers your questions based on our manual in any languages.")
+    st.write("This bot answers your questions based on the manual. Please enter your question below.")
 
-    question = st.text_input("Enter your questions:")
+    question = st.text_input("Enter your question:")
 
     if st.button("Submit"):
         if question:
-            # マニュアルの内容を結合してテキスト化
+            # Concatenate manual content into text
             manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
 
-            # OpenAIに質問とマニュアルを送信して回答を取得
+            # Send question and manual to OpenAI to get the answer
             try:
                 response = openai.ChatCompletion.create(
                     model="gpt-4o",
@@ -65,33 +65,36 @@ if page == "User":
                 ai_response = response['choices'][0]['message']['content']
                 st.success(f"Answer: {ai_response}")
 
-                # 質問と回答を履歴に追加
+                # Add question and answer to history
                 st.session_state['history'].append({'question': question, 'answer': ai_response})
 
-                # フィードバックの収集
+                # Collect feedback
                 feedback_options = ["Yes", "No"]
                 feedback = st.radio(
-                    "Was this answer usuful?", feedback_options, index=-1, key=f"feedback_{len(st.session_state['history'])}"
+                    "Was this answer helpful?",
+                    feedback_options,
+                    index=None,
+                    key=f"feedback_{len(st.session_state['history'])}"
                 )
 
                 if feedback:
                     st.session_state['history'][-1]['feedback'] = feedback
                 else:
-                    st.session_state['history'][-1]['feedback'] = "未評価"
+                    st.session_state['history'][-1]['feedback'] = "Not Rated"
 
             except openai.error.OpenAIError as e:
-                st.error(f"OpenAIへのリクエスト中にエラーが発生しました: {e}")
+                st.error(f"An error occurred while contacting OpenAI: {e}")
         else:
-            st.warning("質問を入力してください。")
+            st.warning("Please enter a question.")
 
-    # 質問履歴の表示
-    st.markdown("## 質問履歴")
+    # Display question history
+    st.markdown("## Question History")
     for idx, qa in enumerate(st.session_state['history']):
-        st.markdown(f"**質問 {idx+1}:** {qa['question']}")
-        st.markdown(f"**回答 {idx+1}:** {qa['answer']}")
-        st.markdown(f"**フィードバック {idx+1}:** {qa.get('feedback', '未評価')}")
+        st.markdown(f"**Question {idx+1}:** {qa['question']}")
+        st.markdown(f"**Answer {idx+1}:** {qa['answer']}")
+        st.markdown(f"**Feedback {idx+1}:** {qa.get('feedback', 'Not Rated')}")
 
-    # フィードバック結果の保存
+    # Save feedback results
     def save_feedback(history):
         if os.path.exists('feedback.csv'):
             try:
@@ -105,9 +108,9 @@ if page == "User":
         for qa in history:
             if not qa.get('feedback_saved', False):
                 new_data.append(
-                    {'question': qa['question'], 'answer': qa['answer'], 'feedback': qa.get('feedback', '未評価')}
+                    {'question': qa['question'], 'answer': qa['answer'], 'feedback': qa.get('feedback', 'Not Rated')}
                 )
-                qa['feedback_saved'] = True  # 重複保存を防ぐ
+                qa['feedback_saved'] = True  # Prevent duplicate saves
 
         if new_data:
             feedback_data = pd.concat([feedback_data, pd.DataFrame(new_data)], ignore_index=True)
@@ -116,47 +119,50 @@ if page == "User":
     save_feedback(st.session_state['history'])
 
 elif page == "Admin":
-    # 管理者認証
-    admin_password = st.sidebar.text_input("Enter your password", type="password")
-    if admin_password == "koki":  # パスワードを設定
-        st.success("Welcome to Admin Page")
+    # Admin authentication
+    admin_password = st.sidebar.text_input("Enter the password", type="password")
+    if admin_password == "koki":  # Set your password
+        st.success("Accessed the admin page.")
 
-        # マニュアルの表示
-        st.markdown("## 現在のマニュアル")
+        # Display the manual
+        st.markdown("## Current Manual")
         st.dataframe(manual_data)
 
-        # 新しいQ&Aの追加
-        st.markdown("## 新しいQ&Aを追加")
-        new_question = st.text_input("新しい質問を入力してください")
-        new_answer = st.text_area("新しい回答を入力してください")
-        if st.button("追加"):
+        # Add new Q&A
+        st.markdown("## Add New Q&A")
+        new_question = st.text_input("Enter a new question", key="new_question")
+        new_answer = st.text_area("Enter a new answer", key="new_answer")
+        if st.button("Add Q&A"):
             if new_question and new_answer:
                 new_row = pd.DataFrame({'質問': [new_question], '回答': [new_answer]})
                 manual_data = pd.concat([manual_data, new_row], ignore_index=True)
                 manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
-                st.success("新しいQ&Aが追加されました。")
+                st.success("The new Q&A has been added.")
 
-                # 入力欄をクリア
+                # Clear input fields
+                st.session_state["new_question"] = ""
+                st.session_state["new_answer"] = ""
+                # Rerun the app to update the manual display
                 st.experimental_rerun()
             else:
-                st.warning("質問と回答を入力してください。")
+                st.warning("Please enter both a question and an answer.")
 
-        # フィードバック結果の表示
-        st.markdown("## フィードバック結果の集計")
+        # Display feedback results
+        st.markdown("## Feedback Summary")
         if os.path.exists('feedback.csv'):
             try:
                 feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
                 if not feedback_data.empty:
                     st.dataframe(feedback_data)
-                    positive_feedback = feedback_data[feedback_data['feedback'] == 'はい'].shape[0]
-                    negative_feedback = feedback_data[feedback_data['feedback'] == 'いいえ'].shape[0]
-                    st.markdown(f"**役に立った:** {positive_feedback}件")
-                    st.markdown(f"**役に立たなかった:** {negative_feedback}件")
+                    positive_feedback = feedback_data[feedback_data['feedback'] == 'Yes'].shape[0]
+                    negative_feedback = feedback_data[feedback_data['feedback'] == 'No'].shape[0]
+                    st.markdown(f"**Helpful:** {positive_feedback}")
+                    st.markdown(f"**Not Helpful:** {negative_feedback}")
                 else:
-                    st.warning("フィードバックデータがまだありません。")
+                    st.warning("There is no feedback data yet.")
             except pd.errors.EmptyDataError:
-                st.warning("フィードバックデータがまだありません。")
+                st.warning("There is no feedback data yet.")
         else:
-            st.warning("フィードバックデータがまだありません。")
+            st.warning("There is no feedback data yet.")
     else:
-        st.error("パスワードが正しくありません。")
+        st.error("Incorrect password.")
