@@ -51,8 +51,15 @@ if page == "ユーザー":
                 response = openai.ChatCompletion.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "あなたは与えられたマニュアルに基づいてのみ回答するアシスタントです。マニュアルにない情報は提供しないでください。"},
-                        {"role": "user", "content": f"マニュアル:\n{manual_text}\n\nユーザーの質問:{question}"}
+                        {
+                            "role": "system",
+                            "content": (
+                                "あなたはユーザーの質問に対して、与えられたマニュアルの内容に基づいて回答するアシスタントです。"
+                                "回答はユーザーの質問と同じ言語で行ってください。"
+                                "マニュアルにない情報は提供しないでくださいが、マニュアルの知識を使って柔軟に回答してください。"
+                            )
+                        },
+                        {"role": "user", "content": f"マニュアル:\n{manual_text}\n\nユーザーの質問:\n{question}"}
                     ]
                 )
                 ai_response = response['choices'][0]['message']['content']
@@ -62,7 +69,9 @@ if page == "ユーザー":
                 st.session_state['history'].append({'question': question, 'answer': ai_response})
 
                 # フィードバックの収集
-                feedback = st.radio("この回答は役に立ちましたか？", ("はい", "いいえ"), key=f"feedback_{len(st.session_state['history'])}")
+                feedback = st.radio(
+                    "この回答は役に立ちましたか？", ("はい", "いいえ"), key=f"feedback_{len(st.session_state['history'])}"
+                )
                 st.session_state['history'][-1]['feedback'] = feedback
 
             except openai.error.OpenAIError as e:
@@ -80,14 +89,19 @@ if page == "ユーザー":
     # フィードバック結果の保存
     def save_feedback(history):
         if os.path.exists('feedback.csv'):
-            feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
+            try:
+                feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
+            except pd.errors.EmptyDataError:
+                feedback_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
         else:
             feedback_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
 
         new_data = []
         for qa in history:
             if not qa.get('feedback_saved', False):
-                new_data.append({'question': qa['question'], 'answer': qa['answer'], 'feedback': qa.get('feedback', '未評価')})
+                new_data.append(
+                    {'question': qa['question'], 'answer': qa['answer'], 'feedback': qa.get('feedback', '未評価')}
+                )
                 qa['feedback_saved'] = True  # 重複保存を防ぐ
 
         if new_data:
@@ -99,7 +113,7 @@ if page == "ユーザー":
 elif page == "管理者":
     # 管理者認証
     admin_password = st.sidebar.text_input("パスワードを入力してください", type="password")
-    if admin_password == "Admin":  # パスワードを設定
+    if admin_password == "your_admin_password":  # パスワードを設定
         st.success("管理者ページにアクセスしました。")
 
         # マニュアルの表示
@@ -122,12 +136,15 @@ elif page == "管理者":
         # フィードバック結果の表示
         st.markdown("## フィードバック結果の集計")
         if os.path.exists('feedback.csv'):
-            feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
-            st.dataframe(feedback_data)
-            positive_feedback = feedback_data[feedback_data['feedback'] == 'はい'].shape[0]
-            negative_feedback = feedback_data[feedback_data['feedback'] == 'いいえ'].shape[0]
-            st.markdown(f"**役に立った:** {positive_feedback}件")
-            st.markdown(f"**役に立たなかった:** {negative_feedback}件")
+            try:
+                feedback_data = pd.read_csv('feedback.csv', encoding='utf-8')
+                st.dataframe(feedback_data)
+                positive_feedback = feedback_data[feedback_data['feedback'] == 'はい'].shape[0]
+                negative_feedback = feedback_data[feedback_data['feedback'] == 'いいえ'].shape[0]
+                st.markdown(f"**役に立った:** {positive_feedback}件")
+                st.markdown(f"**役に立たなかった:** {negative_feedback}件")
+            except pd.errors.EmptyDataError:
+                st.warning("フィードバックデータがまだありません。")
         else:
             st.warning("フィードバックデータがまだありません。")
     else:
