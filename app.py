@@ -21,9 +21,15 @@ def authenticate_google_drive():
     """
     gauth = GoogleAuth()
     
-    # credentials.json ファイルの内容を読み込む
-    with open('credentials.json', 'r') as f:
-        service_account_info = json.load(f)
+    # 環境変数から認証情報を取得
+    credentials_json = os.getenv("GDRIVE_CREDENTIALS")
+    if not credentials_json:
+        raise ValueError("GDRIVE_CREDENTIALS 環境変数が設定されていません。")
+    
+    try:
+        service_account_info = json.loads(credentials_json)
+    except json.JSONDecodeError:
+        raise ValueError("GDRIVE_CREDENTIALS 環境変数のJSONが無効です。")
     
     # service_config を設定
     gauth.settings['service_config'] = {
@@ -32,7 +38,11 @@ def authenticate_google_drive():
     }
     
     # サービスアカウントの認証情報をロードして認証
-    gauth.ServiceAuth()
+    try:
+        gauth.ServiceAuth()
+    except Exception as e:
+        raise RuntimeError(f"Google Driveの認証に失敗しました: {e}")
+    
     drive = GoogleDrive(gauth)
     return drive
 
@@ -308,12 +318,15 @@ if page == "User":
 
                 # 'questions.csv' のフィードバックを更新
                 if os.path.exists('questions.csv'):
-                    question_data = pd.read_csv('questions.csv', encoding='utf-8')
-                    mask = (question_data['question'] == qa['question']) & (question_data['answer'] == qa['answer'])
-                    question_data.loc[mask, 'feedback'] = feedback
-                    question_data.to_csv('questions.csv', index=False, encoding='utf-8')
-                    # Google Drive にアップロード
-                    upload_file_to_drive(drive, 'questions.csv', folder_id)
+                    try:
+                        question_data = pd.read_csv('questions.csv', encoding='utf-8')
+                        mask = (question_data['question'] == qa['question']) & (question_data['answer'] == qa['answer'])
+                        question_data.loc[mask, 'feedback'] = feedback
+                        question_data.to_csv('questions.csv', index=False, encoding='utf-8')
+                        # Google Drive にアップロード
+                        upload_file_to_drive(drive, 'questions.csv', folder_id)
+                    except Exception as e:
+                        st.error(f"Failed to update feedback in questions.csv: {e}")
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
@@ -324,7 +337,11 @@ if page == "User":
 elif page == "Admin":
     # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    if admin_password == "koki":  # 任意の強力なパスワードに変更してください
+    # 環境変数から管理者パスワードを取得することを推奨
+    stored_admin_password = os.getenv("ADMIN_PASSWORD")
+    if not stored_admin_password:
+        st.error("ADMIN_PASSWORD 環境変数が設定されていません。")
+    elif admin_password == stored_admin_password:
         st.success("Accessed the admin page.")
 
         # 入力をクリアする関数
