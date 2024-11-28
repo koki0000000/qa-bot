@@ -2,9 +2,45 @@ import streamlit as st
 import openai
 import pandas as pd
 import os
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 
 # OpenAI API key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Authenticate with Google Drive
+def authenticate():
+    gauth = GoogleAuth()
+    # Specify the path to your credentials.json file
+    credentials_file = 'credentials.json'  # Ensure this file is in the same directory as app.py
+
+    # Load service account credentials
+    gauth.LoadServiceConfigFile(credentials_file)
+    gauth.ServiceAuth()
+    return GoogleDrive(gauth)
+
+# Upload or update file in Google Drive
+def upload_file(drive, file_path, folder_id):
+    file_name = os.path.basename(file_path)
+    # Check if the file already exists in the folder
+    file_list = drive.ListFile({'q': f"title='{file_name}' and '{folder_id}' in parents and trashed=false"}).GetList()
+    if file_list:
+        # Update the existing file
+        file = file_list[0]
+        file.SetContentFile(file_path)
+        file.Upload()
+        print(f'Updated {file_name} in Google Drive.')
+    else:
+        # Upload a new file
+        gfile = drive.CreateFile({'parents': [{'id': folder_id}], 'title': file_name})
+        gfile.SetContentFile(file_path)
+        gfile.Upload()
+        print(f'Uploaded {file_name} to Google Drive.')
+
+# Authenticate with Google Drive
+drive = authenticate()
+# Specify your Google Drive folder ID
+folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # Your provided folder ID
 
 # Apply custom CSS for styling
 st.markdown(
@@ -63,7 +99,7 @@ st.markdown(
     .answer {
         border-left: 5px solid #00cc66;
     }
-    /* Feedback style */
+    /* Feedback section style */
     .feedback-section {
         margin-top: -10px;
         margin-bottom: 20px;
@@ -96,17 +132,17 @@ def load_manual():
             data = pd.read_csv('manual.csv', encoding='utf-8')
             if data.empty:
                 st.error("The manual.csv file is empty. Please add data.")
-                return pd.DataFrame(columns=['Question', 'Answer'])
+                return pd.DataFrame(columns=['質問', '回答'])
             return data
         except pd.errors.EmptyDataError:
             st.error("The manual.csv file has no data.")
-            return pd.DataFrame(columns=['Question', 'Answer'])
+            return pd.DataFrame(columns=['質問', '回答'])
         except Exception as e:
             st.error(f"An error occurred while loading manual.csv: {e}")
-            return pd.DataFrame(columns=['Question', 'Answer'])
+            return pd.DataFrame(columns=['質問', '回答'])
     else:
         st.error("The manual.csv file was not found.")
-        return pd.DataFrame(columns=['Question', 'Answer'])
+        return pd.DataFrame(columns=['質問', '回答'])
 
 manual_data = load_manual()
 
@@ -132,7 +168,18 @@ if page == "User":
     # App configuration
     st.title("💬 Q&A Bot")
     st.write("This bot answers your questions based on the manual. Please enter your question below.")
-    st.write("**This is a beta version. Your active feedback would be greatly appreciated! by Koki**")
+
+    # Add a note about the beta version
+    st.markdown(
+        """
+        <div style='background-color: #333333; padding: 10px; border-radius: 5px; margin-bottom: 20px;'>
+            <span style='color: #FFFFFF; font-size: 16px;'>
+                <strong>This is a beta version. Your active feedback would be greatly appreciated!</strong>
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     question = st.text_input("Enter your question:")
 
@@ -184,6 +231,8 @@ if page == "User":
                     }
                     question_data = pd.concat([question_data, pd.DataFrame([new_row])], ignore_index=True)
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
+                    # Upload to Google Drive
+                    upload_file(drive, 'questions.csv', folder_id)
 
                 save_question()
 
@@ -218,6 +267,8 @@ if page == "User":
                     mask = (question_data['question'] == qa['question']) & (question_data['answer'] == qa['answer'])
                     question_data.loc[mask, 'feedback'] = feedback
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
+                    # Upload updated file to Google Drive
+                    upload_file(drive, 'questions.csv', folder_id)
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
@@ -225,7 +276,7 @@ if page == "User":
 elif page == "Admin":
     # Admin authentication
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    if admin_password == "こうき": 
+    if admin_password == "koki":  # Replace with your password
         st.success("Accessed the admin page.")
 
         # Function to clear inputs
@@ -247,8 +298,9 @@ elif page == "Admin":
                 # Clear input fields
                 clear_inputs()
 
-                # Update the manual display
-                # No need to rerun the app
+                # Upload updated manual to Google Drive
+                upload_file(drive, 'manual.csv', folder_id)
+
             else:
                 st.warning("Please enter both a question and an answer.")
 
@@ -273,5 +325,10 @@ elif page == "Admin":
                 st.warning("There are no questions yet.")
         else:
             st.warning("There are no questions yet.")
+
+        # Optionally, download the questions.csv file
+        if os.path.exists('questions.csv'):
+            with open('questions.csv', 'rb') as f:
+                st.download_button('Download Questions Data', f, file_name='questions.csv')
     else:
         st.error("Incorrect password.")
