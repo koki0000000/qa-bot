@@ -5,66 +5,84 @@ import os
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
-# OpenAI API key from environment variable
+# -------------------------------
+# OpenAI API Key Setup
+# -------------------------------
+# OpenAI APIキーを環境変数から取得
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Authenticate with Google Drive
-def authenticate():
+# -------------------------------
+# Google Drive Authentication
+# -------------------------------
+def authenticate_google_drive():
+    """
+    Google Driveに認証し、Driveオブジェクトを返す関数
+    """
     gauth = GoogleAuth()
-    # Specify the path to your credentials.json file
-    credentials_file = 'credentials.json'  # Ensure this file is in the same directory as app.py
-
-    # Load service account credentials
-    gauth.LoadServiceConfigFile(credentials_file)
+    # credentials.json ファイルのパスを指定
+    gauth.LoadServiceConfigFile('credentials.json')
     gauth.ServiceAuth()
-    return GoogleDrive(gauth)
+    drive = GoogleDrive(gauth)
+    return drive
 
-# Upload or update file in Google Drive
-def upload_file(drive, file_path, folder_id):
+# Google Driveに認証
+drive = authenticate_google_drive()
+
+# アップロード先のGoogle DriveフォルダID
+folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # ご提供のフォルダIDに置き換えてください
+
+# -------------------------------
+# File Upload Function
+# -------------------------------
+def upload_file_to_drive(drive, file_path, folder_id):
+    """
+    指定されたファイルをGoogle Driveの指定フォルダにアップロードまたは更新する関数
+    """
     file_name = os.path.basename(file_path)
-    # Check if the file already exists in the folder
-    file_list = drive.ListFile({'q': f"title='{file_name}' and '{folder_id}' in parents and trashed=false"}).GetList()
+    # 同じ名前のファイルがフォルダ内に存在するか確認
+    file_list = drive.ListFile({
+        'q': f"title='{file_name}' and '{folder_id}' in parents and trashed=false"
+    }).GetList()
     if file_list:
-        # Update the existing file
+        # 既存のファイルを更新
         file = file_list[0]
         file.SetContentFile(file_path)
         file.Upload()
         print(f'Updated {file_name} in Google Drive.')
     else:
-        # Upload a new file
+        # 新しいファイルをアップロード
         gfile = drive.CreateFile({'parents': [{'id': folder_id}], 'title': file_name})
         gfile.SetContentFile(file_path)
         gfile.Upload()
         print(f'Uploaded {file_name} to Google Drive.')
 
-# Authenticate with Google Drive
-drive = authenticate()
-# Specify your Google Drive folder ID
-folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # Your provided folder ID
+# -------------------------------
+# Streamlit App Configuration
+# -------------------------------
 
-# Apply custom CSS for styling
+# カスタムCSSを適用してスタイルを設定
 st.markdown(
     """
     <style>
-    /* Overall background color */
+    /* 全体の背景色 */
     .stApp {
         background-color: #000000;
         font-family: 'Helvetica Neue', sans-serif;
     }
-    /* Title style */
+    /* タイトルのスタイル */
     h1 {
         color: #FFFFFF;
         text-align: center;
         margin-bottom: 20px;
     }
-    /* Sidebar style */
+    /* サイドバーのスタイル */
     .css-1d391kg {
         background-color: #1a1a1a;
     }
     .css-1d391kg .css-hxt7ib {
         color: #FFFFFF;
     }
-    /* Input field style */
+    /* 入力フィールドのスタイル */
     .stTextInput, .stTextArea {
         margin-bottom: 20px;
     }
@@ -72,7 +90,7 @@ st.markdown(
         background-color: #333333;
         color: #FFFFFF;
     }
-    /* Button style */
+    /* ボタンのスタイル */
     .stButton>button {
         background-color: #0066cc;
         color: #FFFFFF;
@@ -85,7 +103,7 @@ st.markdown(
     .stButton>button:hover {
         background-color: #0052a3;
     }
-    /* Question and answer style */
+    /* 質問と回答のスタイル */
     .question, .answer {
         background-color: #1a1a1a;
         padding: 15px;
@@ -99,7 +117,7 @@ st.markdown(
     .answer {
         border-left: 5px solid #00cc66;
     }
-    /* Feedback section style */
+    /* フィードバックセクションのスタイル */
     .feedback-section {
         margin-top: -10px;
         margin-bottom: 20px;
@@ -111,12 +129,12 @@ st.markdown(
     .stRadio>div>label {
         margin-right: 10px;
     }
-    /* Dataframe style */
+    /* データフレームのスタイル */
     .stDataFrame {
         margin-top: 20px;
         color: #FFFFFF;
     }
-    /* Adjust text color globally */
+    /* テキストカラーを全体的に調整 */
     .css-1e5imcs, .css-1v3fvcr {
         color: #FFFFFF;
     }
@@ -125,8 +143,13 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Load manual data
-def load_manual():
+# -------------------------------
+# Load Manual Data
+# -------------------------------
+def load_manual_data():
+    """
+    manual.csv ファイルをロードし、データフレームを返す関数
+    """
     if os.path.exists('manual.csv'):
         try:
             data = pd.read_csv('manual.csv', encoding='utf-8')
@@ -144,19 +167,21 @@ def load_manual():
         st.error("The manual.csv file was not found.")
         return pd.DataFrame(columns=['質問', '回答'])
 
-manual_data = load_manual()
+manual_data = load_manual_data()
 
-# Store manual_data in session state
+# manual_data をセッションステートに保存
 if 'manual_data' not in st.session_state:
     st.session_state['manual_data'] = manual_data
 else:
     manual_data = st.session_state['manual_data']
 
-# Initialize session state for history
+# 質問履歴のセッションステートを初期化
 if 'history' not in st.session_state:
     st.session_state['history'] = []
 
-# Page selection in the sidebar
+# -------------------------------
+# Page Selection
+# -------------------------------
 page = st.sidebar.selectbox(
     "Select a page",
     ["User", "Admin"],
@@ -164,12 +189,15 @@ page = st.sidebar.selectbox(
     key='page_selection'
 )
 
+# -------------------------------
+# User Page
+# -------------------------------
 if page == "User":
-    # App configuration
+    # アプリの設定
     st.title("💬 Q&A Bot")
     st.write("This bot answers your questions based on the manual. Please enter your question below.")
-
-    # Add a note about the beta version
+    
+    # ベータ版の注釈を追加
     st.markdown(
         """
         <div style='background-color: #333333; padding: 10px; border-radius: 5px; margin-bottom: 20px;'>
@@ -180,15 +208,15 @@ if page == "User":
         """,
         unsafe_allow_html=True
     )
-
+    
     question = st.text_input("Enter your question:")
-
+    
     if st.button("Submit"):
         if question:
-            # Concatenate manual content into text
+            # マニュアルの内容をテキストに結合
             manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
-
-            # Send question and manual to OpenAI to get the answer
+    
+            # 質問とマニュアルをOpenAIに送り、回答を取得
             try:
                 response = openai.ChatCompletion.create(
                     model="gpt-4o",
@@ -206,15 +234,15 @@ if page == "User":
                 )
                 ai_response = response['choices'][0]['message']['content']
                 st.success("The answer has been generated. Please see below.")
-
-                # Display question and answer
+    
+                # 質問と回答を表示
                 st.markdown(f"<div class='question'><strong>Question:</strong> {question}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
-
-                # Add question and answer to history
+    
+                # 質問と回答を履歴に追加
                 st.session_state['history'].append({'question': question, 'answer': ai_response, 'feedback': "Not Rated"})
-
-                # Save question and answer to 'questions.csv'
+    
+                # 質問と回答を 'questions.csv' に保存
                 def save_question():
                     if os.path.exists('questions.csv'):
                         try:
@@ -223,7 +251,7 @@ if page == "User":
                             question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
                     else:
                         question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
-
+    
                     new_row = {
                         'question': question,
                         'answer': ai_response,
@@ -231,25 +259,25 @@ if page == "User":
                     }
                     question_data = pd.concat([question_data, pd.DataFrame([new_row])], ignore_index=True)
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
-                    # Upload to Google Drive
-                    upload_file(drive, 'questions.csv', folder_id)
-
+                    # Google Drive にアップロード
+                    upload_file_to_drive(drive, 'questions.csv', folder_id)
+    
                 save_question()
-
+    
             except openai.error.OpenAIError as e:
                 st.error(f"An error occurred while contacting OpenAI: {e}")
         else:
             st.warning("Please enter a question.")
-
-    # Display question history with the newest first
+    
+    # 新しい順に質問履歴を表示
     st.markdown("## 🕘 Question History")
     for idx, qa in enumerate(reversed(st.session_state['history'])):
         actual_idx = len(st.session_state['history']) - idx - 1
         st.markdown(f"<div class='question'><strong>Question {actual_idx+1}:</strong> {qa['question']}</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
-
+    
         if qa['feedback'] == "Not Rated":
-            # Move feedback section directly under the answer
+            # フィードバックセクションを回答の直下に配置
             st.markdown("<div class='feedback-section'>", unsafe_allow_html=True)
             feedback = st.radio(
                 "Was this answer helpful?",
@@ -260,31 +288,34 @@ if page == "User":
             if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
                 qa['feedback'] = feedback
                 st.success("Thank you for your feedback!")
-
-                # Update feedback in 'questions.csv'
+    
+                # 'questions.csv' のフィードバックを更新
                 if os.path.exists('questions.csv'):
                     question_data = pd.read_csv('questions.csv', encoding='utf-8')
                     mask = (question_data['question'] == qa['question']) & (question_data['answer'] == qa['answer'])
                     question_data.loc[mask, 'feedback'] = feedback
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
-                    # Upload updated file to Google Drive
-                    upload_file(drive, 'questions.csv', folder_id)
+                    # Google Drive にアップロード
+                    upload_file_to_drive(drive, 'questions.csv', folder_id)
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
 
+# -------------------------------
+# Admin Page
+# -------------------------------
 elif page == "Admin":
-    # Admin authentication
+    # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    if admin_password == "koki":  # Replace with your password
+    if admin_password == "koki":  # 任意のパスワードに変更してください
         st.success("Accessed the admin page.")
-
-        # Function to clear inputs
+    
+        # 入力をクリアする関数
         def clear_inputs():
             st.session_state["new_question_value"] = ""
             st.session_state["new_answer_value"] = ""
-
-        # Add new Q&A
+    
+        # 新しいQ&Aを追加
         st.markdown("## ➕ Add New Q&A")
         new_question = st.text_input("Enter a new question", key="new_question", value=st.session_state.get("new_question_value", ""))
         new_answer = st.text_area("Enter a new answer", key="new_answer", value=st.session_state.get("new_answer_value", ""))
@@ -294,21 +325,21 @@ elif page == "Admin":
                 st.session_state['manual_data'] = pd.concat([st.session_state['manual_data'], new_row], ignore_index=True)
                 st.session_state['manual_data'].to_csv('manual.csv', index=False, encoding='utf-8')
                 st.success("The new Q&A has been added.")
-
-                # Clear input fields
+    
+                # 入力フィールドをクリア
                 clear_inputs()
-
-                # Upload updated manual to Google Drive
-                upload_file(drive, 'manual.csv', folder_id)
-
+    
+                # 更新されたマニュアルをGoogle Driveにアップロード
+                upload_file_to_drive(drive, 'manual.csv', folder_id)
+    
             else:
                 st.warning("Please enter both a question and an answer.")
-
-        # Display the updated manual data
+    
+        # 更新されたマニュアルデータを表示
         st.markdown("## 📄 Current Manual")
         st.dataframe(st.session_state['manual_data'])
-
-        # Display all questions and feedback
+    
+        # すべての質問とフィードバックを表示
         st.markdown("## 📊 All Questions and Feedback")
         if os.path.exists('questions.csv'):
             try:
@@ -325,8 +356,8 @@ elif page == "Admin":
                 st.warning("There are no questions yet.")
         else:
             st.warning("There are no questions yet.")
-
-        # Optionally, download the questions.csv file
+    
+        # オプションで questions.csv ファイルをダウンロード
         if os.path.exists('questions.csv'):
             with open('questions.csv', 'rb') as f:
                 st.download_button('Download Questions Data', f, file_name='questions.csv')
