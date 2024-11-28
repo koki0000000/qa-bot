@@ -19,10 +19,13 @@ def authenticate_google_drive():
     Google Driveに認証し、Driveオブジェクトを返す関数
     """
     gauth = GoogleAuth()
-    # credentials.json ファイルのパスを指定
-    gauth.LoadCredentialsFile("credentials.json")
     
-    # サービスアカウントの認証情報をロード
+    # 'service_config' を設定
+    gauth.settings['service_config'] = {
+        "client_config_file": "credentials.json"
+    }
+    
+    # サービスアカウントの認証情報をロードして認証
     gauth.ServiceAuth()
     drive = GoogleDrive(gauth)
     return drive
@@ -309,7 +312,7 @@ if page == "User":
 elif page == "Admin":
     # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    if admin_password == "koki":  # 任意のパスワードに変更してください
+    if admin_password == "koki":  # 任意の強力なパスワードに変更してください
         st.success("Accessed the admin page.")
     
         # 入力をクリアする関数
