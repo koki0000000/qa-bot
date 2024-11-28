@@ -3,24 +3,20 @@ import openai
 import pandas as pd
 import os
 import json
-import sys  # sys モジュールのインポート
+import sys
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 # デバッグ情報の表示
-from OpenSSL import crypto  # デバッグ用
-st.write(f"pyOpenSSL version: {crypto.__version__}")
+import OpenSSL
+st.write(f"pyOpenSSL version: {OpenSSL.__version__}")
 st.write(f"Python version: {sys.version}")
 
-# -------------------------------
 # OpenAI API Key Setup
-# -------------------------------
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# -------------------------------
 # Google Drive Authentication
-# -------------------------------
 def authenticate_google_drive():
     credentials_json = os.getenv("GDRIVE_CREDENTIALS")
     if not credentials_json:
@@ -46,11 +42,8 @@ except Exception as e:
     st.error(f"Google Drive authentication failed: {e}")
 
 # アップロード先のGoogle DriveフォルダID
-folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # ご提供のフォルダIDに置き換えてください
+folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'
 
-# -------------------------------
-# File Upload Function
-# -------------------------------
 def upload_file_to_drive(service, file_path, folder_id):
     file_name = os.path.basename(file_path)
     file_metadata = {
@@ -59,14 +52,30 @@ def upload_file_to_drive(service, file_path, folder_id):
     }
     media = MediaFileUpload(file_path, resumable=True)
     try:
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
+        existing_files = service.files().list(
+            q=f"name='{file_name}' and '{folder_id}' in parents and trashed=false",
+            fields='files(id, name)'
         ).execute()
-        st.write(f'Uploaded {file_name} to Google Drive.')
+        if existing_files['files']:
+            # 既存のファイルを更新
+            file_id = existing_files['files'][0]['id']
+            service.files().update(
+                fileId=file_id,
+                media_body=media
+            ).execute()
+            st.write(f'Updated {file_name} in Google Drive.')
+        else:
+            # 新しいファイルをアップロード
+            service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+            st.write(f'Uploaded {file_name} to Google Drive.')
     except Exception as e:
         st.error(f"Failed to upload {file_name} to Google Drive: {e}")
+
+
 
 # -------------------------------
 # Streamlit App Configuration
