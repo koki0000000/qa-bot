@@ -34,7 +34,8 @@ def authenticate_google_drive():
     # service_config を設定
     gauth.settings['service_config'] = {
         "client_json_dict": service_account_info,
-        "scope": ["https://www.googleapis.com/auth/drive"]
+        "scope": ["https://www.googleapis.com/auth/drive"],
+        "client_user_email": service_account_info.get("client_email")  # 追加
     }
     
     # サービスアカウントの認証情報をロードして認証
@@ -73,13 +74,13 @@ def upload_file_to_drive(drive, file_path, folder_id):
             file = file_list[0]
             file.SetContentFile(file_path)
             file.Upload()
-            print(f'Updated {file_name} in Google Drive.')
+            st.write(f'Updated {file_name} in Google Drive.')
         else:
             # 新しいファイルをアップロード
             gfile = drive.CreateFile({'parents': [{'id': folder_id}], 'title': file_name})
             gfile.SetContentFile(file_path)
             gfile.Upload()
-            print(f'Uploaded {file_name} to Google Drive.')
+            st.write(f'Uploaded {file_name} to Google Drive.')
     except Exception as e:
         st.error(f"Failed to upload {file_name} to Google Drive: {e}")
 
@@ -242,7 +243,7 @@ if page == "User":
         if question:
             # マニュアルの内容をテキストに結合
             manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
-
+    
             # 質問とマニュアルをOpenAIに送り、回答を取得
             try:
                 response = openai.ChatCompletion.create(
@@ -261,14 +262,14 @@ if page == "User":
                 )
                 ai_response = response['choices'][0]['message']['content']
                 st.success("The answer has been generated. Please see below.")
-
+    
                 # 質問と回答を表示
                 st.markdown(f"<div class='question'><strong>Question:</strong> {question}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
-
+    
                 # 質問と回答を履歴に追加
                 st.session_state['history'].append({'question': question, 'answer': ai_response, 'feedback': "Not Rated"})
-
+    
                 # 質問と回答を 'questions.csv' に保存
                 def save_question():
                     if os.path.exists('questions.csv'):
@@ -278,7 +279,7 @@ if page == "User":
                             question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
                     else:
                         question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
-
+    
                     new_row = {
                         'question': question,
                         'answer': ai_response,
@@ -288,21 +289,21 @@ if page == "User":
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
                     # Google Drive にアップロード
                     upload_file_to_drive(drive, 'questions.csv', folder_id)
-
+    
                 save_question()
-
+    
             except openai.error.OpenAIError as e:
                 st.error(f"An error occurred while contacting OpenAI: {e}")
         else:
             st.warning("Please enter a question.")
-
+    
     # 新しい順に質問履歴を表示
     st.markdown("## 🕘 Question History")
     for idx, qa in enumerate(reversed(st.session_state['history'])):
         actual_idx = len(st.session_state['history']) - idx - 1
         st.markdown(f"<div class='question'><strong>Question {actual_idx+1}:</strong> {qa['question']}</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
-
+    
         if qa['feedback'] == "Not Rated":
             # フィードバックセクションを回答の直下に配置
             st.markdown("<div class='feedback-section'>", unsafe_allow_html=True)
@@ -315,7 +316,7 @@ if page == "User":
             if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
                 qa['feedback'] = feedback
                 st.success("Thank you for your feedback!")
-
+    
                 # 'questions.csv' のフィードバックを更新
                 if os.path.exists('questions.csv'):
                     try:
@@ -337,7 +338,7 @@ if page == "User":
 elif page == "Admin":
     # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    # 環境変数から管理者パスワードを取得することを推奨
+    # 環境変数から管理者パスワードを取得
     stored_admin_password = os.getenv("ADMIN_PASSWORD")
     if not stored_admin_password:
         st.error("ADMIN_PASSWORD 環境変数が設定されていません。")
