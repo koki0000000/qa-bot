@@ -20,7 +20,9 @@ def authenticate_google_drive():
     """
     gauth = GoogleAuth()
     # credentials.json ファイルのパスを指定
-    gauth.LoadServiceConfigFile('credentials.json')
+    gauth.LoadCredentialsFile("credentials.json")
+    
+    # サービスアカウントの認証情報をロード
     gauth.ServiceAuth()
     drive = GoogleDrive(gauth)
     return drive
