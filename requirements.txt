@@ -3,4 +3,4 @@ openai==0.28.0
 pandas==2.2.3
 pydrive2==1.21.1
 pyOpenSSL==24.3.0
-cryptography==40.0.0
+cryptography==44.0.0
