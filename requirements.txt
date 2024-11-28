@@ -1,9 +1,8 @@
 streamlit==1.40.2 
 openai==0.28.0
 pandas==2.2.3
-pydrive2==1.21.1
-pyOpenSSL<=22.0.0
-cryptography<=39.4.0
+pyOpenSSL
+cryptography
 google-api-python-client
 google-auth
 google-auth-httplib2
