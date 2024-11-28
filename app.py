@@ -3,27 +3,16 @@ import openai
 import pandas as pd
 import os
 import json
-import sys
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# デバッグ情報の表示（必要に応じて）
-# import OpenSSL
-# st.write(f"pyOpenSSL version: {OpenSSL.__version__}")
-# st.write(f"Python version: {sys.version}")
-
 # -------------------------------
-# OpenAI API Key Setup
-# -------------------------------
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# -------------------------------
-# Google Drive Authentication
+# Google Drive 認証
 # -------------------------------
 def authenticate_google_drive():
     """
-    Google Driveにサービスアカウントを使用して認証し、Driveサービスオブジェクトを返す関数
+    サービスアカウントの資格情報を使用してGoogle Driveに認証し、サービスオブジェクトを返す関数
     """
     credentials_json = os.getenv("GDRIVE_CREDENTIALS")
     if not credentials_json:
@@ -48,11 +37,11 @@ try:
 except Exception as e:
     st.error(f"Google Drive authentication failed: {e}")
 
-# アップロード先のGoogle DriveフォルダID
-folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # ご提供のフォルダIDに置き換えてください
+# Google DriveフォルダID
+FOLDER_ID = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # 実際のフォルダIDに置き換えてください
 
 # -------------------------------
-# File Upload Function
+# ファイルアップロード関数
 # -------------------------------
 def upload_file_to_drive(service, file_path, folder_id):
     """
@@ -65,7 +54,7 @@ def upload_file_to_drive(service, file_path, folder_id):
     }
     media = MediaFileUpload(file_path, resumable=True)
     try:
-        # ファイルが既に存在するか確認
+        # 既存のファイルがあるか確認
         existing_files = service.files().list(
             q=f"name='{file_name}' and '{folder_id}' in parents and trashed=false",
             fields='files(id, name)'
@@ -90,40 +79,144 @@ def upload_file_to_drive(service, file_path, folder_id):
         st.error(f"Failed to upload {file_name} to Google Drive: {e}")
 
 # -------------------------------
-# Streamlit App Configuration
+# OpenAI APIキー設定
 # -------------------------------
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# カスタムCSSを適用してスタイルを設定（必要に応じて）
+# -------------------------------
+# データロード関数
+# -------------------------------
+def load_faq_data(file_path='faq.csv'):
+    """
+    faq.csv からFAQデータをロードし、優先順位でソートしたリストを返す関数
+    """
+    if os.path.exists(file_path):
+        try:
+            data = pd.read_csv(file_path, encoding='utf-8')
+            data_sorted = data.sort_values(by='priority')
+            faq_list = data_sorted.to_dict(orient='records')
+            return faq_list
+        except Exception as e:
+            st.error(f"Failed to load FAQ data: {e}")
+            return []
+    else:
+        st.warning("faq.csv not found. Please add FAQs via the admin page.")
+        return []
+
+def load_manual_data(file_path='manual.csv'):
+    """
+    manual.csv からマニュアルデータをロードする関数
+    """
+    if os.path.exists(file_path):
+        try:
+            data = pd.read_csv(file_path, encoding='utf-8')
+            manual_list = data.to_dict(orient='records')
+            return manual_list
+        except Exception as e:
+            st.error(f"Failed to load manual data: {e}")
+            return []
+    else:
+        st.warning("manual.csv not found. Please add manual entries via the admin page.")
+        return []
+
+def load_questions_data(file_path='questions.csv'):
+    """
+    questions.csv からユーザーの質問とフィードバックをロードする関数
+    """
+    if os.path.exists(file_path):
+        try:
+            data = pd.read_csv(file_path, encoding='utf-8')
+            return data
+        except pd.errors.EmptyDataError:
+            st.warning("questions.csv is empty.")
+            return pd.DataFrame(columns=['question', 'answer', 'feedback'])
+        except Exception as e:
+            st.error(f"Failed to load questions data: {e}")
+            return pd.DataFrame(columns=['question', 'answer', 'feedback'])
+    else:
+        st.warning("questions.csv not found.")
+        return pd.DataFrame(columns=['question', 'answer', 'feedback'])
+
+# -------------------------------
+# データ保存関数
+# -------------------------------
+def save_faq_data(faq_df, file_path='faq.csv'):
+    """
+    FAQデータフレームをfaq.csvに保存し、Google Driveにアップロードする関数
+    """
+    try:
+        faq_df.to_csv(file_path, index=False, encoding='utf-8')
+        upload_file_to_drive(drive_service, file_path, FOLDER_ID)
+        st.success("FAQ data saved successfully.")
+    except Exception as e:
+        st.error(f"Failed to save FAQ data: {e}")
+
+def save_manual_data(manual_df, file_path='manual.csv'):
+    """
+    Manualデータフレームをmanual.csvに保存し、Google Driveにアップロードする関数
+    """
+    try:
+        manual_df.to_csv(file_path, index=False, encoding='utf-8')
+        upload_file_to_drive(drive_service, file_path, FOLDER_ID)
+        st.success("Manual data saved successfully.")
+    except Exception as e:
+        st.error(f"Failed to save manual data: {e}")
+
+def save_questions_data(questions_df, file_path='questions.csv'):
+    """
+    Questionsデータフレームをquestions.csvに保存し、Google Driveにアップロードする関数
+    """
+    try:
+        questions_df.to_csv(file_path, index=False, encoding='utf-8')
+        upload_file_to_drive(drive_service, file_path, FOLDER_ID)
+        st.success("Questions data saved successfully.")
+    except Exception as e:
+        st.error(f"Failed to save questions data: {e}")
+
+# -------------------------------
+# セッションステートの初期化
+# -------------------------------
+if 'faq_list' not in st.session_state:
+    st.session_state['faq_list'] = load_faq_data()
+if 'manual_list' not in st.session_state:
+    st.session_state['manual_list'] = load_manual_data()
+if 'questions_df' not in st.session_state:
+    st.session_state['questions_df'] = load_questions_data()
+if 'history' not in st.session_state:
+    st.session_state['history'] = []
+if 'admin_faq_df' not in st.session_state:
+    st.session_state['admin_faq_df'] = pd.DataFrame(load_faq_data())
+if 'admin_manual_df' not in st.session_state:
+    st.session_state['admin_manual_df'] = pd.DataFrame(load_manual_data())
+
+# -------------------------------
+# カスタムCSSによるスタイリング
+# -------------------------------
 st.markdown(
     """
     <style>
-    /* 全体の背景色 */
+    /* Overall background color */
     .stApp {
         background-color: #000000;
         font-family: 'Helvetica Neue', sans-serif;
     }
-    /* タイトルのスタイル */
-    h1 {
+    /* Title styling */
+    h1, h2, h3, h4, h5, h6 {
         color: #FFFFFF;
-        text-align: center;
-        margin-bottom: 20px;
     }
-    /* サイドバーのスタイル */
+    /* Sidebar styling */
     .css-1d391kg {
         background-color: #1a1a1a;
     }
     .css-1d391kg .css-hxt7ib {
         color: #FFFFFF;
     }
-    /* 入力フィールドのスタイル */
-    .stTextInput, .stTextArea {
-        margin-bottom: 20px;
-    }
-    .stTextInput>div>div>input, .stTextArea textarea {
+    /* Input fields styling */
+    .stTextInput > div > div > input, .stTextArea textarea {
         background-color: #333333;
         color: #FFFFFF;
     }
-    /* ボタンのスタイル */
+    /* Button styling */
     .stButton>button {
         background-color: #0066cc;
         color: #FFFFFF;
@@ -136,7 +229,7 @@ st.markdown(
     .stButton>button:hover {
         background-color: #0052a3;
     }
-    /* 質問と回答のスタイル */
+    /* Question and Answer styling */
     .question, .answer {
         background-color: #1a1a1a;
         padding: 15px;
@@ -150,7 +243,7 @@ st.markdown(
     .answer {
         border-left: 5px solid #00cc66;
     }
-    /* フィードバックセクションのスタイル */
+    /* Feedback section styling */
     .feedback-section {
         margin-top: -10px;
         margin-bottom: 20px;
@@ -162,14 +255,35 @@ st.markdown(
     .stRadio>div>label {
         margin-right: 10px;
     }
-    /* データフレームのスタイル */
+    /* DataFrame styling */
     .stDataFrame {
         margin-top: 20px;
         color: #FFFFFF;
     }
-    /* テキストカラーを全体的に調整 */
-    .css-1e5imcs, .css-1v3fvcr {
+    /* FAQ section styling */
+    .faq-container {
+        display: flex;
+        overflow-x: auto;
+        padding: 10px 0;
+    }
+    .faq-item {
+        flex: 0 0 auto;
+        background-color: #1a1a1a;
         color: #FFFFFF;
+        padding: 15px;
+        margin-right: 10px;
+        border-radius: 50%;
+        width: 120px;
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        text-align: center;
+        transition: background-color 0.3s;
+    }
+    .faq-item:hover {
+        background-color: #333333;
     }
     </style>
     """,
@@ -177,60 +291,51 @@ st.markdown(
 )
 
 # -------------------------------
-# Load Manual Data
+# ヘルパー関数
 # -------------------------------
-def load_manual_data():
+def get_combined_faq_manual(faq_list, manual_list):
     """
-    manual.csv ファイルをロードし、データフレームを返す関数
+    FAQリストを優先し、マニュアルリストを続けて結合したリストを返す関数
     """
-    if os.path.exists('manual.csv'):
-        try:
-            data = pd.read_csv('manual.csv', encoding='utf-8')
-            if data.empty:
-                st.error("The manual.csv file is empty. Please add data.")
-                return pd.DataFrame(columns=['質問', '回答'])
-            return data
-        except pd.errors.EmptyDataError:
-            st.error("The manual.csv file has no data.")
-            return pd.DataFrame(columns=['質問', '回答'])
-        except Exception as e:
-            st.error(f"An error occurred while loading manual.csv: {e}")
-            return pd.DataFrame(columns=['質問', '回答'])
-    else:
-        st.error("The manual.csv file was not found.")
-        return pd.DataFrame(columns=['質問', '回答'])
+    return faq_list + manual_list
 
-manual_data = load_manual_data()
-
-# manual_data をセッションステートに保存
-if 'manual_data' not in st.session_state:
-    st.session_state['manual_data'] = manual_data
-else:
-    manual_data = st.session_state['manual_data']
-
-# 質問履歴のセッションステートを初期化
-if 'history' not in st.session_state:
-    st.session_state['history'] = []
-
-# -------------------------------
-# Page Selection
-# -------------------------------
-page = st.sidebar.selectbox(
-    "Select a page",
-    ["User", "Admin"],
-    index=0,
-    key='page_selection'
-)
-
-# -------------------------------
-# User Page
-# -------------------------------
-if page == "User":
-    # アプリの設定
-    st.title("💬 Q&A Bot")
-    st.write("This bot answers your questions based on the manual. Please enter your question below.")
+def display_faq_section(faq_list, manual_list):
+    """
+    FAQとマニュアルの質問を横スクロール可能な丸囲みで表示する関数
+    """
+    st.markdown("## ❓ Frequently Asked Questions")
     
-    # ベータ版の注釈を追加
+    combined_list = get_combined_faq_manual(faq_list, manual_list)
+    
+    # 横スクロール可能なFAQコンテナを表示
+    st.markdown('<div class="faq-container">', unsafe_allow_html=True)
+    for faq in combined_list:
+        # 質問のシングルクォートをエスケープ
+        question_escaped = faq['question'].replace("'", "\\'")
+        st.markdown(
+            f'''
+            <div class="faq-item" onclick="
+                const questionInput = document.getElementById('question_input');
+                questionInput.value = '{question_escaped}';
+                const submitButton = document.getElementById('submit_button');
+                submitButton.click();
+            ">
+                ❓<br>{faq['question']}
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# -------------------------------
+# ユーザーページ
+# -------------------------------
+def user_page():
+    # アプリのタイトルと説明
+    st.title("💬 Q&A Bot")
+    st.write("This bot answers your questions based on the manual and FAQs. Please enter your question below.")
+    
+    # ベータ版の通知
     st.markdown(
         """
         <div style='background-color: #333333; padding: 10px; border-radius: 5px; margin-bottom: 20px;'>
@@ -242,14 +347,22 @@ if page == "User":
         unsafe_allow_html=True
     )
     
-    question = st.text_input("Enter your question:")
+    # -------------------------------
+    # FAQセクションの表示
+    # -------------------------------
+    display_faq_section(st.session_state['faq_list'], st.session_state['manual_list'])
     
-    if st.button("Submit"):
+    # -------------------------------
+    # ユーザーの質問入力
+    # -------------------------------
+    question = st.text_input("Enter your question:", key="question_input")
+    
+    if st.button("Submit", key='submit_button'):
         if question:
-            # マニュアルの内容をテキストに結合
-            manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
-
-            # 質問とマニュアルをOpenAIに送り、回答を取得
+            # FAQとマニュアルの内容を結合
+            manual_text = "\n".join([f"Q: {item['question']}\nA: {item['answer']}" for item in get_combined_faq_manual(st.session_state['faq_list'], st.session_state['manual_list'])])
+            
+            # OpenAI APIを呼び出して回答を取得
             try:
                 response = openai.ChatCompletion.create(
                     model="gpt-4o",
@@ -257,154 +370,266 @@ if page == "User":
                         {
                             "role": "system",
                             "content": (
-                                "You are an assistant who answers the user's questions based solely on the provided manual."
+                                "You are an assistant who answers the user's questions based solely on the provided manual and FAQs."
                                 " Please answer in the same language as the user's question."
-                                " Do not provide information not included in the manual, but use the knowledge from the manual to answer flexibly."
+                                " Do not provide information not included in the manual or FAQs, but use the knowledge from them to answer flexibly."
                             )
                         },
-                        {"role": "user", "content": f"Manual:\n{manual_text}\n\nUser's question:\n{question}"}
+                        {"role": "user", "content": f"Manual and FAQs:\n{manual_text}\n\nUser's question:\n{question}"}
                     ]
                 )
                 ai_response = response['choices'][0]['message']['content']
                 st.success("The answer has been generated. Please see below.")
-
+                
                 # 質問と回答を表示
                 st.markdown(f"<div class='question'><strong>Question:</strong> {question}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
-
-                # 質問と回答を履歴に追加
+                
+                # 履歴に追加
                 st.session_state['history'].append({'question': question, 'answer': ai_response, 'feedback': "Not Rated"})
-
-                # 質問と回答を 'questions.csv' に保存
+                
+                # questions.csvに保存
                 def save_question():
-                    if os.path.exists('questions.csv'):
-                        try:
-                            question_data = pd.read_csv('questions.csv', encoding='utf-8')
-                        except pd.errors.EmptyDataError:
-                            question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
-                    else:
-                        question_data = pd.DataFrame(columns=['question', 'answer', 'feedback'])
-
+                    questions_df = st.session_state['questions_df']
                     new_row = {
                         'question': question,
                         'answer': ai_response,
                         'feedback': "Not Rated"
                     }
-                    question_data = pd.concat([question_data, pd.DataFrame([new_row])], ignore_index=True)
-                    question_data.to_csv('questions.csv', index=False, encoding='utf-8')
-                    # Google Drive にアップロード
-                    upload_file_to_drive(drive_service, 'questions.csv', folder_id)
-
+                    questions_df = questions_df.append(new_row, ignore_index=True)
+                    st.session_state['questions_df'] = questions_df
+                    save_questions_data(questions_df)
+                
                 save_question()
-
+                
             except openai.error.OpenAIError as e:
                 st.error(f"An error occurred while contacting OpenAI: {e}")
         else:
             st.warning("Please enter a question.")
-
-    # 新しい順に質問履歴を表示
+    
+    # -------------------------------
+    # 質問履歴とフィードバック
+    # -------------------------------
     st.markdown("## 🕘 Question History")
     for idx, qa in enumerate(reversed(st.session_state['history'])):
         actual_idx = len(st.session_state['history']) - idx - 1
         st.markdown(f"<div class='question'><strong>Question {actual_idx+1}:</strong> {qa['question']}</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
-
+        
         if qa['feedback'] == "Not Rated":
-            # フィードバックセクションを回答の直下に配置
-            st.markdown("<div class='feedback-section'>", unsafe_allow_html=True)
-            feedback = st.radio(
-                "Was this answer helpful?",
-                ["Yes", "No"],
-                key=f"feedback_{actual_idx}",
-                index=0
-            )
-            if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
-                qa['feedback'] = feedback
-                st.success("Thank you for your feedback!")
-
-                # 'questions.csv' のフィードバックを更新
-                if os.path.exists('questions.csv'):
-                    try:
-                        question_data = pd.read_csv('questions.csv', encoding='utf-8')
-                        mask = (question_data['question'] == qa['question']) & (question_data['answer'] == qa['answer'])
-                        question_data.loc[mask, 'feedback'] = feedback
-                        question_data.to_csv('questions.csv', index=False, encoding='utf-8')
-                        # Google Drive にアップロード
-                        upload_file_to_drive(drive_service, 'questions.csv', folder_id)
-                    except Exception as e:
-                        st.error(f"Failed to update feedback in questions.csv: {e}")
-            st.markdown("</div>", unsafe_allow_html=True)
+            with st.container():
+                feedback = st.radio(
+                    "Was this answer helpful?",
+                    ["Yes", "No"],
+                    key=f"feedback_{actual_idx}",
+                    horizontal=True
+                )
+                if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
+                    st.session_state['history'][actual_idx]['feedback'] = feedback
+                    st.success("Thank you for your feedback!")
+                    
+                    # questions.csvのフィードバックを更新
+                    questions_df = st.session_state['questions_df']
+                    mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
+                    questions_df.loc[mask, 'feedback'] = feedback
+                    st.session_state['questions_df'] = questions_df
+                    save_questions_data(questions_df)
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
 
 # -------------------------------
-# Admin Page
+# 管理者ページ
 # -------------------------------
-elif page == "Admin":
+def admin_page():
     # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    # 環境変数から管理者パスワードを取得
     stored_admin_password = os.getenv("ADMIN_PASSWORD")
+    
     if not stored_admin_password:
-        st.error("ADMIN_PASSWORD 環境変数が設定されていません。")
-    elif admin_password == stored_admin_password:
-        st.success("Accessed the admin page.")
-
-        # 入力をクリアする関数
-        def clear_inputs():
-            st.session_state["new_question_value"] = ""
-            st.session_state["new_answer_value"] = ""
-
-        # 新しいQ&Aを追加
-        st.markdown("## ➕ Add New Q&A")
-        new_question = st.text_input("Enter a new question", key="new_question", value=st.session_state.get("new_question_value", ""))
-        new_answer = st.text_area("Enter a new answer", key="new_answer", value=st.session_state.get("new_answer_value", ""))
-        if st.button("Add"):
-            if new_question and new_answer:
-                new_row = pd.DataFrame({'質問': [new_question], '回答': [new_answer]})
-                st.session_state['manual_data'] = pd.concat([st.session_state['manual_data'], new_row], ignore_index=True)
-                st.session_state['manual_data'].to_csv('manual.csv', index=False, encoding='utf-8')
-                st.success("The new Q&A has been added.")
-
-                # 入力フィールドをクリア
-                clear_inputs()
-
-                # 更新されたマニュアルをGoogle Driveにアップロード
-                upload_file_to_drive(drive_service, 'manual.csv', folder_id)
-
+        st.error("ADMIN_PASSWORD environment variable is not set.")
+        return
+    elif admin_password != stored_admin_password:
+        st.error("Incorrect password.")
+        return
+    
+    st.success("Accessed the admin page.")
+    
+    # -------------------------------
+    # FAQ管理
+    # -------------------------------
+    st.markdown("## ➕ Admin: Manage FAQs")
+    
+    with st.expander("Add FAQ"):
+        new_faq_question = st.text_input("New Question")
+        new_faq_answer = st.text_area("New Answer")
+        new_faq_priority = st.number_input("Priority (Lower number = Higher priority)", min_value=1, step=1, value=1)
+        if st.button("Add FAQ"):
+            if new_faq_question and new_faq_answer:
+                new_faq = {'priority': new_faq_priority, 'question': new_faq_question, 'answer': new_faq_answer}
+                st.session_state['admin_faq_df'] = st.session_state['admin_faq_df'].append(new_faq, ignore_index=True)
+                save_faq_data(st.session_state['admin_faq_df'])
+                st.experimental_rerun()
             else:
                 st.warning("Please enter both a question and an answer.")
-
-        # 更新されたマニュアルデータを表示
-        st.markdown("## 📄 Current Manual")
-        st.dataframe(st.session_state['manual_data'])
-
-        # すべての質問とフィードバックを表示
-        st.markdown("## 📊 All Questions and Feedback")
-        if os.path.exists('questions.csv'):
-            try:
-                question_data = pd.read_csv('questions.csv', encoding='utf-8')
-                if not question_data.empty:
-                    st.dataframe(question_data)
-                    positive_feedback = question_data[question_data['feedback'] == 'Yes'].shape[0]
-                    negative_feedback = question_data[question_data['feedback'] == 'No'].shape[0]
-                    st.markdown(f"**Helpful:** {positive_feedback}")
-                    st.markdown(f"**Not Helpful:** {negative_feedback}")
-                else:
-                    st.warning("There are no questions yet.")
-            except pd.errors.EmptyDataError:
-                st.warning("There are no questions yet.")
-            except Exception as e:
-                st.error(f"An error occurred while loading questions.csv: {e}")
+    
+    with st.expander("Edit/Delete FAQs"):
+        if not st.session_state['admin_faq_df'].empty:
+            faq_df = st.session_state['admin_faq_df']
+            for idx, row in faq_df.iterrows():
+                st.markdown(f"### FAQ {idx + 1}")
+                col1, col2, col3 = st.columns([2, 2, 1])
+                with col1:
+                    edited_question = st.text_input("Question", value=row['question'], key=f"admin_faq_question_{idx}")
+                with col2:
+                    edited_answer = st.text_area("Answer", value=row['answer'], key=f"admin_faq_answer_{idx}")
+                with col3:
+                    edited_priority = st.number_input("Priority", min_value=1, step=1, value=row['priority'], key=f"admin_faq_priority_{idx}")
+                
+                # Update and Delete buttons
+                update_col, delete_col = st.columns([1, 1])
+                with update_col:
+                    if st.button("Update", key=f"update_faq_{idx}"):
+                        st.session_state['admin_faq_df'].at[idx, 'question'] = edited_question
+                        st.session_state['admin_faq_df'].at[idx, 'answer'] = edited_answer
+                        st.session_state['admin_faq_df'].at[idx, 'priority'] = edited_priority
+                        save_faq_data(st.session_state['admin_faq_df'])
+                        st.experimental_rerun()
+                with delete_col:
+                    if st.button("Delete", key=f"delete_faq_{idx}"):
+                        st.session_state['admin_faq_df'] = st.session_state['admin_faq_df'].drop(idx).reset_index(drop=True)
+                        save_faq_data(st.session_state['admin_faq_df'])
+                        st.experimental_rerun()
         else:
-            st.warning("There are no questions yet.")
-
-        # オプションで questions.csv ファイルをダウンロード
+            st.warning("No FAQs available.")
+    
+    # -------------------------------
+    # Manual管理
+    # -------------------------------
+    st.markdown("## ➕ Admin: Manage Manual")
+    
+    with st.expander("Add Manual"):
+        new_manual_question = st.text_input("New Manual Question")
+        new_manual_answer = st.text_area("New Manual Answer")
+        if st.button("Add Manual"):
+            if new_manual_question and new_manual_answer:
+                new_manual = {'question': new_manual_question, 'answer': new_manual_answer}
+                st.session_state['admin_manual_df'] = st.session_state['admin_manual_df'].append(new_manual, ignore_index=True)
+                save_manual_data(st.session_state['admin_manual_df'])
+                st.experimental_rerun()
+            else:
+                st.warning("Please enter both a question and an answer.")
+    
+    with st.expander("Edit/Delete Manual Entries"):
+        if not st.session_state['admin_manual_df'].empty:
+            manual_df = st.session_state['admin_manual_df']
+            for idx, row in manual_df.iterrows():
+                st.markdown(f"### Manual {idx + 1}")
+                col1, col2 = st.columns([2, 2])
+                with col1:
+                    edited_manual_question = st.text_input("Question", value=row['question'], key=f"admin_manual_question_{idx}")
+                with col2:
+                    edited_manual_answer = st.text_area("Answer", value=row['answer'], key=f"admin_manual_answer_{idx}")
+                
+                # Update and Delete buttons
+                update_col, delete_col = st.columns([1, 1])
+                with update_col:
+                    if st.button("Update", key=f"update_manual_{idx}"):
+                        st.session_state['admin_manual_df'].at[idx, 'question'] = edited_manual_question
+                        st.session_state['admin_manual_df'].at[idx, 'answer'] = edited_manual_answer
+                        save_manual_data(st.session_state['admin_manual_df'])
+                        st.experimental_rerun()
+                with delete_col:
+                    if st.button("Delete", key=f"delete_manual_{idx}"):
+                        st.session_state['admin_manual_df'] = st.session_state['admin_manual_df'].drop(idx).reset_index(drop=True)
+                        save_manual_data(st.session_state['admin_manual_df'])
+                        st.experimental_rerun()
+        else:
+            st.warning("No Manual entries available.")
+    
+    # -------------------------------
+    # フィードバック管理
+    # -------------------------------
+    st.markdown("## ➕ Admin: Manage Feedback")
+    
+    with st.expander("Delete Feedback"):
+        if not st.session_state['questions_df'].empty:
+            questions_df = st.session_state['questions_df']
+            for idx, row in questions_df.iterrows():
+                st.markdown(f"### Feedback {idx + 1}")
+                st.markdown(f"**Question:** {row['question']}")
+                st.markdown(f"**Answer:** {row['answer']}")
+                st.markdown(f"**Feedback:** {row['feedback']}")
+                if st.button("Delete Feedback", key=f"delete_feedback_{idx}"):
+                    st.session_state['questions_df'] = st.session_state['questions_df'].drop(idx).reset_index(drop=True)
+                    save_questions_data(st.session_state['questions_df'])
+                    st.experimental_rerun()
+        else:
+            st.warning("No feedback data available.")
+    
+    # -------------------------------
+    # 現在のデータの表示
+    # -------------------------------
+    st.markdown("## 📄 Current FAQs")
+    if not st.session_state['admin_faq_df'].empty:
+        st.dataframe(st.session_state['admin_faq_df'])
+    else:
+        st.warning("No FAQ data available.")
+    
+    st.markdown("## 📄 Current Manual")
+    if not st.session_state['admin_manual_df'].empty:
+        st.dataframe(st.session_state['admin_manual_df'])
+    else:
+        st.warning("No Manual data available.")
+    
+    st.markdown("## 📊 All Questions and Feedback")
+    if not st.session_state['questions_df'].empty:
+        st.dataframe(st.session_state['questions_df'])
+        positive_feedback = st.session_state['questions_df'][st.session_state['questions_df']['feedback'] == 'Yes'].shape[0]
+        negative_feedback = st.session_state['questions_df'][st.session_state['questions_df']['feedback'] == 'No'].shape[0]
+        st.markdown(f"**Helpful:** {positive_feedback}")
+        st.markdown(f"**Not Helpful:** {negative_feedback}")
+    else:
+        st.warning("No questions and feedback data available.")
+    
+    # -------------------------------
+    # データファイルのダウンロード
+    # -------------------------------
+    st.markdown("## 📥 Download Data Files")
+    
+    with st.expander("Download Data"):
+        if os.path.exists('faq.csv'):
+            try:
+                with open('faq.csv', 'rb') as f:
+                    st.download_button('Download FAQ Data', f, file_name='faq.csv')
+            except Exception as e:
+                st.error(f"Failed to read faq.csv for download: {e}")
+        if os.path.exists('manual.csv'):
+            try:
+                with open('manual.csv', 'rb') as f:
+                    st.download_button('Download Manual Data', f, file_name='manual.csv')
+            except Exception as e:
+                st.error(f"Failed to read manual.csv for download: {e}")
         if os.path.exists('questions.csv'):
             try:
                 with open('questions.csv', 'rb') as f:
                     st.download_button('Download Questions Data', f, file_name='questions.csv')
             except Exception as e:
                 st.error(f"Failed to read questions.csv for download: {e}")
-    else:
-        st.error("Incorrect password.")
+
+# -------------------------------
+# ページ選択
+# -------------------------------
+page = st.sidebar.selectbox(
+    "Select a page",
+    ["User", "Admin"],
+    index=0,
+    key='page_selection'
+)
+
+# -------------------------------
+# 選択されたページの表示
+# -------------------------------
+if page == "User":
+    user_page()
+elif page == "Admin":
+    admin_page()
