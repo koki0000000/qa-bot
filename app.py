@@ -8,16 +8,23 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# デバッグ情報の表示
-import OpenSSL
-st.write(f"pyOpenSSL version: {OpenSSL.__version__}")
-st.write(f"Python version: {sys.version}")
+# デバッグ情報の表示（必要に応じて）
+# import OpenSSL
+# st.write(f"pyOpenSSL version: {OpenSSL.__version__}")
+# st.write(f"Python version: {sys.version}")
 
+# -------------------------------
 # OpenAI API Key Setup
+# -------------------------------
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# -------------------------------
 # Google Drive Authentication
+# -------------------------------
 def authenticate_google_drive():
+    """
+    Google Driveにサービスアカウントを使用して認証し、Driveサービスオブジェクトを返す関数
+    """
     credentials_json = os.getenv("GDRIVE_CREDENTIALS")
     if not credentials_json:
         raise ValueError("GDRIVE_CREDENTIALS 環境変数が設定されていません。")
@@ -42,9 +49,15 @@ except Exception as e:
     st.error(f"Google Drive authentication failed: {e}")
 
 # アップロード先のGoogle DriveフォルダID
-folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'
+folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # ご提供のフォルダIDに置き換えてください
 
+# -------------------------------
+# File Upload Function
+# -------------------------------
 def upload_file_to_drive(service, file_path, folder_id):
+    """
+    指定されたファイルをGoogle Driveの指定フォルダにアップロードまたは更新する関数
+    """
     file_name = os.path.basename(file_path)
     file_metadata = {
         'name': file_name,
@@ -52,6 +65,7 @@ def upload_file_to_drive(service, file_path, folder_id):
     }
     media = MediaFileUpload(file_path, resumable=True)
     try:
+        # ファイルが既に存在するか確認
         existing_files = service.files().list(
             q=f"name='{file_name}' and '{folder_id}' in parents and trashed=false",
             fields='files(id, name)'
@@ -75,11 +89,11 @@ def upload_file_to_drive(service, file_path, folder_id):
     except Exception as e:
         st.error(f"Failed to upload {file_name} to Google Drive: {e}")
 
-
-
 # -------------------------------
 # Streamlit App Configuration
 # -------------------------------
+
+# カスタムCSSを適用してスタイルを設定（必要に応じて）
 st.markdown(
     """
     <style>
@@ -166,6 +180,9 @@ st.markdown(
 # Load Manual Data
 # -------------------------------
 def load_manual_data():
+    """
+    manual.csv ファイルをロードし、データフレームを返す関数
+    """
     if os.path.exists('manual.csv'):
         try:
             data = pd.read_csv('manual.csv', encoding='utf-8')
@@ -209,9 +226,10 @@ page = st.sidebar.selectbox(
 # User Page
 # -------------------------------
 if page == "User":
+    # アプリの設定
     st.title("💬 Q&A Bot")
     st.write("This bot answers your questions based on the manual. Please enter your question below.")
-
+    
     # ベータ版の注釈を追加
     st.markdown(
         """
@@ -223,13 +241,15 @@ if page == "User":
         """,
         unsafe_allow_html=True
     )
-
+    
     question = st.text_input("Enter your question:")
-
+    
     if st.button("Submit"):
         if question:
+            # マニュアルの内容をテキストに結合
             manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
 
+            # 質問とマニュアルをOpenAIに送り、回答を取得
             try:
                 response = openai.ChatCompletion.create(
                     model="gpt-4o",
@@ -323,6 +343,7 @@ if page == "User":
 elif page == "Admin":
     # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
+    # 環境変数から管理者パスワードを取得
     stored_admin_password = os.getenv("ADMIN_PASSWORD")
     if not stored_admin_password:
         st.error("ADMIN_PASSWORD 環境変数が設定されていません。")
