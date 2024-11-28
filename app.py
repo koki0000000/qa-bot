@@ -3,31 +3,25 @@ import openai
 import pandas as pd
 import os
 import json
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
-from OpenSSL import crypto  # デバッグ用
 import sys  # sys モジュールのインポート
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 # デバッグ情報の表示
+from OpenSSL import crypto  # デバッグ用
 st.write(f"pyOpenSSL version: {crypto.__version__}")
 st.write(f"Python version: {sys.version}")
 
 # -------------------------------
 # OpenAI API Key Setup
 # -------------------------------
-# OpenAI APIキーを環境変数から取得
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # -------------------------------
 # Google Drive Authentication
 # -------------------------------
 def authenticate_google_drive():
-    """
-    Google Driveにサービスアカウントを使用して認証し、Driveオブジェクトを返す関数
-    """
-    gauth = GoogleAuth()
-    
-    # 環境変数から認証情報を取得
     credentials_json = os.getenv("GDRIVE_CREDENTIALS")
     if not credentials_json:
         raise ValueError("GDRIVE_CREDENTIALS 環境変数が設定されていません。")
@@ -37,25 +31,17 @@ def authenticate_google_drive():
     except json.JSONDecodeError:
         raise ValueError("GDRIVE_CREDENTIALS 環境変数のJSONが無効です。")
     
-    # service_config を設定
-    gauth.settings['service_config'] = {
-        "client_json_dict": service_account_info,
-        "scope": ["https://www.googleapis.com/auth/drive"],
-        "client_user_email": service_account_info.get("client_email")  # 追加
-    }
+    credentials = service_account.Credentials.from_service_account_info(
+        service_account_info,
+        scopes=["https://www.googleapis.com/auth/drive"]
+    )
     
-    # サービスアカウントの認証情報をロードして認証
-    try:
-        gauth.ServiceAuth()
-    except Exception as e:
-        raise RuntimeError(f"Google Driveの認証に失敗しました: {e}")
-    
-    drive = GoogleDrive(gauth)
-    return drive
+    service = build('drive', 'v3', credentials=credentials)
+    return service
 
 # Google Driveに認証
 try:
-    drive = authenticate_google_drive()
+    drive_service = authenticate_google_drive()
 except Exception as e:
     st.error(f"Google Drive authentication failed: {e}")
 
@@ -65,36 +51,26 @@ folder_id = '1ifXllfufA5EVGlWVEk8RAYvrQKE-5Ox9'  # ご提供のフォルダIDに
 # -------------------------------
 # File Upload Function
 # -------------------------------
-def upload_file_to_drive(drive, file_path, folder_id):
-    """
-    指定されたファイルをGoogle Driveの指定フォルダにアップロードまたは更新する関数
-    """
+def upload_file_to_drive(service, file_path, folder_id):
     file_name = os.path.basename(file_path)
+    file_metadata = {
+        'name': file_name,
+        'parents': [folder_id]
+    }
+    media = MediaFileUpload(file_path, resumable=True)
     try:
-        # 同じ名前のファイルがフォルダ内に存在するか確認
-        file_list = drive.ListFile({
-            'q': f"title='{file_name}' and '{folder_id}' in parents and trashed=false"
-        }).GetList()
-        if file_list:
-            # 既存のファイルを更新
-            file = file_list[0]
-            file.SetContentFile(file_path)
-            file.Upload()
-            st.write(f'Updated {file_name} in Google Drive.')
-        else:
-            # 新しいファイルをアップロード
-            gfile = drive.CreateFile({'parents': [{'id': folder_id}], 'title': file_name})
-            gfile.SetContentFile(file_path)
-            gfile.Upload()
-            st.write(f'Uploaded {file_name} to Google Drive.')
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        st.write(f'Uploaded {file_name} to Google Drive.')
     except Exception as e:
         st.error(f"Failed to upload {file_name} to Google Drive: {e}")
 
 # -------------------------------
 # Streamlit App Configuration
 # -------------------------------
-
-# カスタムCSSを適用してスタイルを設定
 st.markdown(
     """
     <style>
@@ -181,9 +157,6 @@ st.markdown(
 # Load Manual Data
 # -------------------------------
 def load_manual_data():
-    """
-    manual.csv ファイルをロードし、データフレームを返す関数
-    """
     if os.path.exists('manual.csv'):
         try:
             data = pd.read_csv('manual.csv', encoding='utf-8')
@@ -227,10 +200,9 @@ page = st.sidebar.selectbox(
 # User Page
 # -------------------------------
 if page == "User":
-    # アプリの設定
     st.title("💬 Q&A Bot")
     st.write("This bot answers your questions based on the manual. Please enter your question below.")
-    
+
     # ベータ版の注釈を追加
     st.markdown(
         """
@@ -242,15 +214,13 @@ if page == "User":
         """,
         unsafe_allow_html=True
     )
-    
+
     question = st.text_input("Enter your question:")
-    
+
     if st.button("Submit"):
         if question:
-            # マニュアルの内容をテキストに結合
             manual_text = "\n".join(manual_data['質問'] + "\n" + manual_data['回答'])
 
-            # 質問とマニュアルをOpenAIに送り、回答を取得
             try:
                 response = openai.ChatCompletion.create(
                     model="gpt-4o",
@@ -294,7 +264,7 @@ if page == "User":
                     question_data = pd.concat([question_data, pd.DataFrame([new_row])], ignore_index=True)
                     question_data.to_csv('questions.csv', index=False, encoding='utf-8')
                     # Google Drive にアップロード
-                    upload_file_to_drive(drive, 'questions.csv', folder_id)
+                    upload_file_to_drive(drive_service, 'questions.csv', folder_id)
 
                 save_question()
 
@@ -331,7 +301,7 @@ if page == "User":
                         question_data.loc[mask, 'feedback'] = feedback
                         question_data.to_csv('questions.csv', index=False, encoding='utf-8')
                         # Google Drive にアップロード
-                        upload_file_to_drive(drive, 'questions.csv', folder_id)
+                        upload_file_to_drive(drive_service, 'questions.csv', folder_id)
                     except Exception as e:
                         st.error(f"Failed to update feedback in questions.csv: {e}")
             st.markdown("</div>", unsafe_allow_html=True)
@@ -344,7 +314,6 @@ if page == "User":
 elif page == "Admin":
     # 管理者認証
     admin_password = st.sidebar.text_input("Enter the password", type="password")
-    # 環境変数から管理者パスワードを取得
     stored_admin_password = os.getenv("ADMIN_PASSWORD")
     if not stored_admin_password:
         st.error("ADMIN_PASSWORD 環境変数が設定されていません。")
@@ -371,7 +340,7 @@ elif page == "Admin":
                 clear_inputs()
 
                 # 更新されたマニュアルをGoogle Driveにアップロード
-                upload_file_to_drive(drive, 'manual.csv', folder_id)
+                upload_file_to_drive(drive_service, 'manual.csv', folder_id)
 
             else:
                 st.warning("Please enter both a question and an answer.")
