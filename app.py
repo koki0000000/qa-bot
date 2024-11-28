@@ -195,28 +195,23 @@ if 'admin_manual_df' not in st.session_state:
 st.markdown(
     """
     <style>
-    /* Overall background color */
-    .stApp {
-        background-color: #f0f2f6;
-        font-family: 'Helvetica Neue', sans-serif;
-    }
-    /* Title styling */
+    /* タイトルやテキストの色 */
     h1, h2, h3, h4, h5, h6 {
         color: #333333;
     }
-    /* Sidebar styling */
+    /* サイドバーのスタイル */
     .css-1d391kg {
         background-color: #ffffff;
     }
     .css-1d391kg .css-hxt7ib {
         color: #333333;
     }
-    /* Input fields styling */
+    /* 入力フィールドのスタイル */
     .stTextInput > div > div > input, .stTextArea textarea {
         background-color: #ffffff;
         color: #333333;
     }
-    /* Button styling */
+    /* ボタンのスタイル */
     .stButton>button {
         background-color: #0066cc;
         color: #FFFFFF;
@@ -229,7 +224,7 @@ st.markdown(
     .stButton>button:hover {
         background-color: #0052a3;
     }
-    /* Question and Answer styling */
+    /* 質問と回答のスタイル */
     .question, .answer {
         background-color: #ffffff;
         padding: 15px;
@@ -243,7 +238,7 @@ st.markdown(
     .answer {
         border-left: 5px solid #00cc66;
     }
-    /* Feedback section styling */
+    /* フィードバックセクションのスタイル */
     .feedback-section {
         margin-top: -10px;
         margin-bottom: 20px;
@@ -255,27 +250,25 @@ st.markdown(
     .stRadio>div>label {
         margin-right: 10px;
     }
-    /* DataFrame styling */
+    /* データフレームのスタイル */
     .stDataFrame {
         margin-top: 20px;
         color: #333333;
     }
-    /* FAQ section styling */
+    /* FAQセクションのスタイル */
     .faq-container {
         display: flex;
         overflow-x: auto;
         padding: 10px 0;
     }
     .faq-item {
-        flex: 0 0 auto;
         background-color: #0066cc;
         color: #FFFFFF;
         padding: 20px;
         margin-right: 15px;
         border-radius: 50%;
-        width: auto;
-        height: 100px;
         min-width: 150px;
+        height: 100px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -286,6 +279,14 @@ st.markdown(
     }
     .faq-item:hover {
         background-color: #0052a3;
+    }
+    /* スクロールバーのスタイル */
+    .faq-container::-webkit-scrollbar {
+        height: 8px;
+    }
+    .faq-container::-webkit-scrollbar-thumb {
+        background-color: #cccccc;
+        border-radius: 4px;
     }
     </style>
     """,
@@ -304,7 +305,7 @@ def get_combined_faq_manual(faq_list, manual_list):
 def display_faq_section(faq_list, manual_list):
     """
     FAQとマニュアルの質問を横スクロール可能な丸囲みで表示する関数
-    最初に3つのFAQを表示し、スクロールで追加の質問を表示
+    最初に3つのFAQを表示し、残りはスクロールで表示
     """
     st.markdown("## ❓ Frequently Asked Questions")
     
@@ -314,39 +315,33 @@ def display_faq_section(faq_list, manual_list):
     initial_faq = combined_list[:3]
     remaining_faq = combined_list[3:]
     
-    # 最初の3つを別々に表示
+    # 最初の3つを表示
     st.markdown('<div class="faq-container">', unsafe_allow_html=True)
     for faq in initial_faq:
-        question_escaped = faq['question'].replace("'", "\\'")
         st.markdown(
             f'''
-            <div class="faq-item" onclick="
-                const questionInput = document.getElementById('question_input');
-                questionInput.value = '{question_escaped}';
-                const submitButton = document.getElementById('submit_button');
-                submitButton.click();
-            ">
-                ❓<br>{faq['question']}
+            <div class="faq-item" style="flex: 0 0 auto;">
+                <button style="background: none; border: none; color: inherit; cursor: pointer; width: 100%; height: 100%;" 
+                        onclick="window.location.href='#';">
+                    ❓<br>{faq['question']}
+                </button>
             </div>
             ''',
             unsafe_allow_html=True
         )
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # 残りの質問をスクロール可能なセクションに表示
+    # 残りのFAQをスクロール可能なセクションで表示
     if remaining_faq:
         st.markdown('<div class="faq-container">', unsafe_allow_html=True)
         for faq in remaining_faq:
-            question_escaped = faq['question'].replace("'", "\\'")
             st.markdown(
                 f'''
-                <div class="faq-item" onclick="
-                    const questionInput = document.getElementById('question_input');
-                    questionInput.value = '{question_escaped}';
-                    const submitButton = document.getElementById('submit_button');
-                    submitButton.click();
-                ">
-                    ❓<br>{faq['question']}
+                <div class="faq-item" style="flex: 0 0 auto;">
+                    <button style="background: none; border: none; color: inherit; cursor: pointer; width: 100%; height: 100%;" 
+                            onclick="window.location.href='#';">
+                        ❓<br>{faq['question']}
+                    </button>
                 </div>
                 ''',
                 unsafe_allow_html=True
@@ -376,7 +371,34 @@ def user_page():
     # -------------------------------
     # FAQセクションの表示
     # -------------------------------
+    combined_faq_list = get_combined_faq_manual(st.session_state['faq_list'], st.session_state['manual_list'])
     display_faq_section(st.session_state['faq_list'], st.session_state['manual_list'])
+    
+    # -------------------------------
+    # FAQボタンの表示と処理
+    # -------------------------------
+    combined_faq_list = get_combined_faq_manual(st.session_state['faq_list'], st.session_state['manual_list'])
+    
+    # 初期の3つを表示
+    initial_faq = combined_faq_list[:3]
+    remaining_faq = combined_faq_list[3:]
+    
+    # 最初の3つのFAQボタン
+    st.markdown('<div class="faq-container">', unsafe_allow_html=True)
+    for faq in initial_faq:
+        if st.button(faq['question'], key=f"faq_{faq['priority']}_{faq['question']}"):
+            st.session_state['question_input'] = faq['question']
+            process_question(faq['question'])
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 残りのFAQボタンをスクロール可能なセクションで表示
+    if remaining_faq:
+        st.markdown('<div class="faq-container">', unsafe_allow_html=True)
+        for faq in remaining_faq:
+            if st.button(faq['question'], key=f"faq_{faq['priority']}_{faq['question']}"):
+                st.session_state['question_input'] = faq['question']
+                process_question(faq['question'])
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # -------------------------------
     # ユーザーの質問入力
@@ -385,54 +407,63 @@ def user_page():
     
     if st.button("Submit", key='submit_button'):
         if question:
-            # FAQとマニュアルの内容を結合
-            manual_text = "\n".join([f"Q: {item['question']}\nA: {item['answer']}" for item in get_combined_faq_manual(st.session_state['faq_list'], st.session_state['manual_list'])])
-            
-            # OpenAI APIを呼び出して回答を取得
-            try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-4o",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are an assistant who answers the user's questions based solely on the provided manual and FAQs."
-                                " Please answer in the same language as the user's question."
-                                " Do not provide information not included in the manual or FAQs, but use the knowledge from them to answer flexibly."
-                            )
-                        },
-                        {"role": "user", "content": f"Manual and FAQs:\n{manual_text}\n\nUser's question:\n{question}"}
-                    ]
-                )
-                ai_response = response['choices'][0]['message']['content']
-                st.success("The answer has been generated. Please see below.")
-                
-                # 質問と回答を表示
-                st.markdown(f"<div class='question'><strong>Question:</strong> {question}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
-                
-                # 履歴に追加
-                st.session_state['history'].append({'question': question, 'answer': ai_response, 'feedback': "Not Rated"})
-                
-                # questions.csvに保存
-                def save_question():
-                    questions_df = st.session_state['questions_df']
-                    new_row = {
-                        'question': question,
-                        'answer': ai_response,
-                        'feedback': "Not Rated"
-                    }
-                    # append を concat に置き換え
-                    questions_df = pd.concat([questions_df, pd.DataFrame([new_row])], ignore_index=True)
-                    st.session_state['questions_df'] = questions_df
-                    save_questions_data(questions_df)
-                
-                save_question()
-                
-            except openai.error.OpenAIError as e:
-                st.error(f"An error occurred while contacting OpenAI: {e}")
+            process_question(question)
         else:
             st.warning("Please enter a question.")
+
+    # -------------------------------
+    # 質問処理関数
+    # -------------------------------
+    def process_question(user_question):
+        """
+        ユーザーの質問を処理し、回答を取得して表示する関数
+        """
+        # FAQとマニュアルの内容を結合
+        manual_text = "\n".join([f"Q: {item['question']}\nA: {item['answer']}" for item in combined_faq_list])
+        
+        # OpenAI APIを呼び出して回答を取得
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an assistant who answers the user's questions based solely on the provided manual and FAQs."
+                            " Please answer in the same language as the user's question."
+                            " Do not provide information not included in the manual or FAQs, but use the knowledge from them to answer flexibly."
+                        )
+                    },
+                    {"role": "user", "content": f"Manual and FAQs:\n{manual_text}\n\nUser's question:\n{user_question}"}
+                ]
+            )
+            ai_response = response['choices'][0]['message']['content']
+            st.success("The answer has been generated. Please see below.")
+            
+            # 質問と回答を表示
+            st.markdown(f"<div class='question'><strong>Question:</strong> {user_question}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
+            
+            # 履歴に追加
+            st.session_state['history'].append({'question': user_question, 'answer': ai_response, 'feedback': "Not Rated"})
+            
+            # questions.csvに保存
+            def save_question():
+                questions_df = st.session_state['questions_df']
+                new_row = {
+                    'question': user_question,
+                    'answer': ai_response,
+                    'feedback': "Not Rated"
+                }
+                # append を concat に置き換え
+                questions_df = pd.concat([questions_df, pd.DataFrame([new_row])], ignore_index=True)
+                st.session_state['questions_df'] = questions_df
+                save_questions_data(questions_df)
+            
+            save_question()
+            
+        except openai.error.OpenAIError as e:
+            st.error(f"An error occurred while contacting OpenAI: {e}")
     
     # -------------------------------
     # 質問履歴とフィードバック
@@ -451,34 +482,16 @@ def user_page():
                     key=f"feedback_{actual_idx}",
                     horizontal=True
                 )
-                if 'experimental_rerun' in dir(st):
-                    submit_feedback = st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}")
-                    if submit_feedback:
-                        st.session_state['history'][actual_idx]['feedback'] = feedback
-                        st.success("Thank you for your feedback!")
-                        
-                        # questions.csvのフィードバックを更新
-                        questions_df = st.session_state['questions_df']
-                        mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
-                        questions_df.loc[mask, 'feedback'] = feedback
-                        st.session_state['questions_df'] = questions_df
-                        save_questions_data(questions_df)
-                        
-                        st.experimental_rerun()
-                else:
-                    submit_feedback = st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}")
-                    if submit_feedback:
-                        st.session_state['history'][actual_idx]['feedback'] = feedback
-                        st.success("Thank you for your feedback!")
-                        
-                        # questions.csvのフィードバックを更新
-                        questions_df = st.session_state['questions_df']
-                        mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
-                        questions_df.loc[mask, 'feedback'] = feedback
-                        st.session_state['questions_df'] = questions_df
-                        save_questions_data(questions_df)
-                        
-                        st.experimental_rerun()
+                if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
+                    st.session_state['history'][actual_idx]['feedback'] = feedback
+                    st.success("Thank you for your feedback!")
+                    
+                    # questions.csvのフィードバックを更新
+                    questions_df = st.session_state['questions_df']
+                    mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
+                    questions_df.loc[mask, 'feedback'] = feedback
+                    st.session_state['questions_df'] = questions_df
+                    save_questions_data(questions_df)
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
 
