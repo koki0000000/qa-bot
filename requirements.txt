@@ -4,3 +4,7 @@ pandas==2.2.3
 pydrive2==1.21.1
 pyOpenSSL<=22.0.0
 cryptography<=39.4.0
+google-api-python-client
+google-auth
+google-auth-httplib2
+google-auth-oauthlib
