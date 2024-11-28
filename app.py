@@ -197,24 +197,24 @@ st.markdown(
     <style>
     /* Overall background color */
     .stApp {
-        background-color: #000000;
+        background-color: #f0f2f6;
         font-family: 'Helvetica Neue', sans-serif;
     }
     /* Title styling */
     h1, h2, h3, h4, h5, h6 {
-        color: #FFFFFF;
+        color: #333333;
     }
     /* Sidebar styling */
     .css-1d391kg {
-        background-color: #1a1a1a;
+        background-color: #ffffff;
     }
     .css-1d391kg .css-hxt7ib {
-        color: #FFFFFF;
+        color: #333333;
     }
     /* Input fields styling */
     .stTextInput > div > div > input, .stTextArea textarea {
-        background-color: #333333;
-        color: #FFFFFF;
+        background-color: #ffffff;
+        color: #333333;
     }
     /* Button styling */
     .stButton>button {
@@ -231,11 +231,11 @@ st.markdown(
     }
     /* Question and Answer styling */
     .question, .answer {
-        background-color: #1a1a1a;
+        background-color: #ffffff;
         padding: 15px;
         border-radius: 5px;
         margin-bottom: 10px;
-        color: #FFFFFF;
+        color: #333333;
     }
     .question {
         border-left: 5px solid #0066cc;
@@ -250,7 +250,7 @@ st.markdown(
     }
     .stRadio>div {
         flex-direction: row;
-        color: #FFFFFF;
+        color: #333333;
     }
     .stRadio>div>label {
         margin-right: 10px;
@@ -258,7 +258,7 @@ st.markdown(
     /* DataFrame styling */
     .stDataFrame {
         margin-top: 20px;
-        color: #FFFFFF;
+        color: #333333;
     }
     /* FAQ section styling */
     .faq-container {
@@ -268,22 +268,24 @@ st.markdown(
     }
     .faq-item {
         flex: 0 0 auto;
-        background-color: #1a1a1a;
+        background-color: #0066cc;
         color: #FFFFFF;
-        padding: 15px;
-        margin-right: 10px;
+        padding: 20px;
+        margin-right: 15px;
         border-radius: 50%;
-        width: 120px;
-        height: 120px;
+        width: auto;
+        height: 100px;
+        min-width: 150px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         text-align: center;
         transition: background-color 0.3s;
+        white-space: normal;
     }
     .faq-item:hover {
-        background-color: #333333;
+        background-color: #0052a3;
     }
     </style>
     """,
@@ -302,15 +304,19 @@ def get_combined_faq_manual(faq_list, manual_list):
 def display_faq_section(faq_list, manual_list):
     """
     FAQとマニュアルの質問を横スクロール可能な丸囲みで表示する関数
+    最初に3つのFAQを表示し、スクロールで追加の質問を表示
     """
     st.markdown("## ❓ Frequently Asked Questions")
     
     combined_list = get_combined_faq_manual(faq_list, manual_list)
     
-    # 横スクロール可能なFAQコンテナを表示
+    # 最初の3つを表示
+    initial_faq = combined_list[:3]
+    remaining_faq = combined_list[3:]
+    
+    # 最初の3つを別々に表示
     st.markdown('<div class="faq-container">', unsafe_allow_html=True)
-    for faq in combined_list:
-        # 質問のシングルクォートをエスケープ
+    for faq in initial_faq:
         question_escaped = faq['question'].replace("'", "\\'")
         st.markdown(
             f'''
@@ -326,6 +332,26 @@ def display_faq_section(faq_list, manual_list):
             unsafe_allow_html=True
         )
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 残りの質問をスクロール可能なセクションに表示
+    if remaining_faq:
+        st.markdown('<div class="faq-container">', unsafe_allow_html=True)
+        for faq in remaining_faq:
+            question_escaped = faq['question'].replace("'", "\\'")
+            st.markdown(
+                f'''
+                <div class="faq-item" onclick="
+                    const questionInput = document.getElementById('question_input');
+                    questionInput.value = '{question_escaped}';
+                    const submitButton = document.getElementById('submit_button');
+                    submitButton.click();
+                ">
+                    ❓<br>{faq['question']}
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------
 # ユーザーページ
@@ -338,8 +364,8 @@ def user_page():
     # ベータ版の通知
     st.markdown(
         """
-        <div style='background-color: #333333; padding: 10px; border-radius: 5px; margin-bottom: 20px;'>
-            <span style='color: #FFFFFF; font-size: 16px;'>
+        <div style='background-color: #f2f2f2; padding: 10px; border-radius: 5px; margin-bottom: 20px;'>
+            <span style='color: #333333; font-size: 16px;'>
                 <strong>This is a beta version. Your active feedback would be greatly appreciated!</strong>
             </span>
         </div>
@@ -396,7 +422,8 @@ def user_page():
                         'answer': ai_response,
                         'feedback': "Not Rated"
                     }
-                    questions_df = questions_df.append(new_row, ignore_index=True)
+                    # append を concat に置き換え
+                    questions_df = pd.concat([questions_df, pd.DataFrame([new_row])], ignore_index=True)
                     st.session_state['questions_df'] = questions_df
                     save_questions_data(questions_df)
                 
@@ -424,16 +451,34 @@ def user_page():
                     key=f"feedback_{actual_idx}",
                     horizontal=True
                 )
-                if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
-                    st.session_state['history'][actual_idx]['feedback'] = feedback
-                    st.success("Thank you for your feedback!")
-                    
-                    # questions.csvのフィードバックを更新
-                    questions_df = st.session_state['questions_df']
-                    mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
-                    questions_df.loc[mask, 'feedback'] = feedback
-                    st.session_state['questions_df'] = questions_df
-                    save_questions_data(questions_df)
+                if 'experimental_rerun' in dir(st):
+                    submit_feedback = st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}")
+                    if submit_feedback:
+                        st.session_state['history'][actual_idx]['feedback'] = feedback
+                        st.success("Thank you for your feedback!")
+                        
+                        # questions.csvのフィードバックを更新
+                        questions_df = st.session_state['questions_df']
+                        mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
+                        questions_df.loc[mask, 'feedback'] = feedback
+                        st.session_state['questions_df'] = questions_df
+                        save_questions_data(questions_df)
+                        
+                        st.experimental_rerun()
+                else:
+                    submit_feedback = st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}")
+                    if submit_feedback:
+                        st.session_state['history'][actual_idx]['feedback'] = feedback
+                        st.success("Thank you for your feedback!")
+                        
+                        # questions.csvのフィードバックを更新
+                        questions_df = st.session_state['questions_df']
+                        mask = (questions_df['question'] == qa['question']) & (questions_df['answer'] == qa['answer'])
+                        questions_df.loc[mask, 'feedback'] = feedback
+                        st.session_state['questions_df'] = questions_df
+                        save_questions_data(questions_df)
+                        
+                        st.experimental_rerun()
         else:
             st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
 
@@ -466,7 +511,8 @@ def admin_page():
         if st.button("Add FAQ"):
             if new_faq_question and new_faq_answer:
                 new_faq = {'priority': new_faq_priority, 'question': new_faq_question, 'answer': new_faq_answer}
-                st.session_state['admin_faq_df'] = st.session_state['admin_faq_df'].append(new_faq, ignore_index=True)
+                # append を concat に置き換え
+                st.session_state['admin_faq_df'] = pd.concat([st.session_state['admin_faq_df'], pd.DataFrame([new_faq])], ignore_index=True)
                 save_faq_data(st.session_state['admin_faq_df'])
                 st.experimental_rerun()
             else:
@@ -513,7 +559,8 @@ def admin_page():
         if st.button("Add Manual"):
             if new_manual_question and new_manual_answer:
                 new_manual = {'question': new_manual_question, 'answer': new_manual_answer}
-                st.session_state['admin_manual_df'] = st.session_state['admin_manual_df'].append(new_manual, ignore_index=True)
+                # append を concat に置き換え
+                st.session_state['admin_manual_df'] = pd.concat([st.session_state['admin_manual_df'], pd.DataFrame([new_manual])], ignore_index=True)
                 save_manual_data(st.session_state['admin_manual_df'])
                 st.experimental_rerun()
             else:
