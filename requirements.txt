@@ -1,9 +1,9 @@
-streamlit==1.40.2 
+streamlit==1.26.0
 openai==0.28.0
-pandas==2.2.3
-pyOpenSSL
-cryptography
-google-api-python-client
-google-auth
-google-auth-httplib2
-google-auth-oauthlib
+pandas==2.1.1
+pyOpenSSL==23.2.0
+cryptography==41.0.3
+google-api-python-client==2.94.0
+google-auth==2.23.4
+google-auth-httplib2==0.1.0
+google-auth-oauthlib==1.0.0
