@@ -287,7 +287,7 @@ if page == "User":
     cols = st.columns(3)
     for idx, question in enumerate(faq_questions):
         with cols[idx % 3]:
-            if st.button(question, key=f"faq_{idx}"):
+            if st.button(question, key=f"faq_{idx}", css_class="question-button"):
                 st.session_state['selected_question'] = question
 
     # 質問入力欄
@@ -325,11 +325,12 @@ if page == "User":
                 st.markdown(f"<div class='answer'><strong>Answer:</strong> {ai_response}</div>", unsafe_allow_html=True)
 
                 # 質問と回答を履歴に追加
-                st.session_state['feedback_data'] = st.session_state['feedback_data'].append({
+                new_feedback = pd.DataFrame([{
                     'question': question,
                     'answer': ai_response,
                     'feedback': "Not Rated"
-                }, ignore_index=True)
+                }])
+                st.session_state['feedback_data'] = pd.concat([st.session_state['feedback_data'], new_feedback], ignore_index=True)
 
                 # 質問と回答を 'feedback.csv' に保存
                 def save_feedback():
@@ -403,7 +404,7 @@ elif page == "Admin":
                     new_row = pd.DataFrame({
                         'question': [new_question],
                         'answer': [new_answer],
-                        'priority': [new_priority]
+                        'priority': [int(new_priority)]
                     })
                     st.session_state['manual_data'] = pd.concat([st.session_state['manual_data'], new_row], ignore_index=True)
                     st.session_state['manual_data'].to_csv('manual.csv', index=False, encoding='utf-8')
@@ -420,7 +421,13 @@ elif page == "Admin":
             with st.expander(f"Q&A {idx + 1}"):
                 edited_question = st.text_input("Question", value=row['question'], key=f"edit_question_{idx}")
                 edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_answer_{idx}")
-                edited_priority = st.number_input("Priority", min_value=1, step=1, value=row['priority'], key=f"edit_priority_{idx}")
+                edited_priority = st.number_input(
+                    "Priority", 
+                    min_value=1, 
+                    step=1, 
+                    value=int(row['priority']),  # Cast to int to ensure consistency
+                    key=f"edit_priority_{idx}"
+                )
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("Save Changes", key=f"save_{idx}"):
