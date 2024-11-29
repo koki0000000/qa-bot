@@ -432,9 +432,9 @@ elif page == "Admin":
                     st.warning("Please enter both a question and an answer.")
 
         # ---------------------------
-        # 📄 Current Manual Data (DataFrame View)
+        # Current Manual Data (DataFrame View) with Edit Buttons
         # ---------------------------
-        st.markdown("## 📄 Current Manual Data (DataFrame View)")
+        st.markdown("### 📄 Current Manual Data (DataFrame View)")
 
         manual_data = st.session_state['manual_data']
 
@@ -490,76 +490,66 @@ elif page == "Admin":
             st.info("No Q&A entries found in manual.csv.")
 
         # ---------------------------
-        # 📊 All Feedback
+        # Manage Feedback.csv
         # ---------------------------
-        st.markdown("## 📊 All Feedback")
+        st.markdown("## 🗑️ Manage Feedback")
 
         feedback_data = st.session_state['feedback_data']
-
         if not feedback_data.empty:
             for idx, row in feedback_data.iterrows():
-                with st.expander(f"Feedback {idx + 1}"):
-                    st.write(f"**Question:** {row['question']}")
-                    st.write(f"**Answer:** {row['answer']}")
-                    st.write(f"**Feedback:** {row['feedback']}")
-                    # フィードバックの編集ボタン（オプショナル）
-                    edit_feedback = st.button("Edit Feedback", key=f"edit_feedback_{idx}")
-                    delete_feedback = st.button("Delete Feedback", key=f"delete_feedback_{idx}")
+                # 各フィードバックに「Edit」ボタンを追加
+                cols = st.columns([7, 1, 2])  # データとボタンの割合を調整
+                with cols[0]:
+                    st.markdown(f"**Feedback {idx + 1}:**")
+                    st.markdown(f"**Question:** {row['question']}")
+                    st.markdown(f"**Answer:** {row['answer']}")
+                    feedback_display = row['feedback'] if not pd.isna(row['feedback']) else "Not Rated"
+                    st.markdown(f"**Feedback:** {feedback_display}")
+                with cols[1]:
+                    edit_feedback_button = st.button("Edit", key=f"edit_feedback_{idx}")
+                with cols[2]:
+                    delete_feedback_button = st.button("Delete", key=f"delete_feedback_{idx}")
 
-                    if edit_feedback:
-                        with st.expander(f"Editing Feedback {idx + 1}", expanded=True):
-                            new_feedback = st.radio(
-                                "Was this answer helpful?",
-                                ["Yes", "No"],
-                                index=0,
-                                key=f"edit_feedback_radio_{idx}"
-                            )
-                            if st.button("Save Feedback", key=f"save_feedback_{idx}"):
-                                feedback_data.at[idx, 'feedback'] = new_feedback
-                                st.session_state['feedback_data'] = feedback_data
-                                feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-                                st.success(f"Feedback {idx + 1} has been updated.")
-                                # Google Drive にアップロード
-                                upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+                if edit_feedback_button:
+                    # 編集フォームを表示
+                    with st.expander(f"Editing Feedback {idx + 1}", expanded=True):
+                        feedback_options = ["Yes", "No", "Not Rated"]
+                        edited_feedback = st.selectbox(
+                            "Update Feedback",
+                            feedback_options,
+                            index=feedback_options.index(row['feedback']) if row['feedback'] in feedback_options else 2,
+                            key=f"select_feedback_{idx}"
+                        )
 
-                    if delete_feedback:
-                        feedback_data = feedback_data.drop(idx).reset_index(drop=True)
-                        st.session_state['feedback_data'] = feedback_data
-                        feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-                        st.success(f"Feedback {idx + 1} has been deleted.")
-                        # Google Drive にアップロード
-                        upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+                        if st.button("Save Feedback", key=f"save_feedback_{idx}"):
+                            feedback_data.at[idx, 'feedback'] = edited_feedback
+                            st.session_state['feedback_data'] = feedback_data
+                            feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
+                            st.success(f"Feedback {idx + 1} has been updated.")
+                            # Google Drive にアップロード
+                            upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+
+                if delete_feedback_button:
+                    feedback_data = feedback_data.drop(idx).reset_index(drop=True)
+                    st.session_state['feedback_data'] = feedback_data
+                    feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
+                    st.success(f"Feedback {idx + 1} has been deleted.")
+                    # Google Drive にアップロード
+                    upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
         else:
             st.info("There is no feedback to display.")
 
         # ---------------------------
-        # Display Current Manual Data (DataFrame View) and All Feedback
+        # Display Current Manual Data (DataFrame View)
         # ---------------------------
-
-        # ※ 上記で既に「📄 Current Manual Data (DataFrame View)」と「📊 All Feedback」を編集可能にしているため、
-        #     ここでは追加の「Current Manual Data (Editable)」と「Current Manual Data」を削除しています。
-
-        # ---------------------------
-        # Display Current Manual Data (DataFrame View) - Removed
-        # ---------------------------
+        # 既に手動で編集可能なボタンを追加しているため、ここでは不要
+        # ユーザーが要求した「📄 Current Manual Data (DataFrame View)」に編集ボタンを追加している
 
         # ---------------------------
-        # Display Current Manual Data as Editable Table - Removed
+        # Display Current Feedback Data (Optional DataFrame View)
         # ---------------------------
-
-        # ---------------------------
-        # Display Current Manual Data (DataFrame View) and All Feedback
-        # ---------------------------
-        # 既に各エントリごとに編集ボタンが設置されているため、追加のテーブルビューは不要です。
-
-        # ---------------------------
-        # Display Current Manual Data (DataFrame View) and All Feedback - Removed Duplicate Sections
-        # ---------------------------
-
-        # ---------------------------
-        # Display Current Manual Data and All Feedback - Cleaned Up
-        # ---------------------------
-        # 不要な重複セクションを削除しました。
+        # フィードバックのデータフレームビューは必要に応じて保持または削除できます
+        # ここではユーザーが「📊 All Feedback」に編集ボタンを追加することを希望しているため、以下は不要
 
         # ---------------------------
         # Download Files
