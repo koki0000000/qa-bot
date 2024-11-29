@@ -196,7 +196,7 @@ def load_manual_data():
     if os.path.exists('manual.csv'):
         try:
             data = pd.read_csv('manual.csv', encoding='utf-8')
-            # 'priority' 列の欠損値を2で埋める（オプショナルにするためにNaNを許容）
+            # 'priority' 列の欠損値を許容し、Int64型に変換（欠損値を許容）
             if 'priority' in data.columns:
                 data['priority'] = pd.to_numeric(data['priority'], errors='coerce').astype('Int64')
             else:
@@ -431,48 +431,61 @@ elif page == "Admin":
                 else:
                     st.warning("Please enter both a question and an answer.")
 
-        # 既存のQ&Aを編集・削除するセクション
-        st.markdown("### Existing Q&A")
+        # ---------------------------
+        # Existing Q&A with Edit Buttons
+        # ---------------------------
+        st.markdown("### 📄 Current Manual Data")
+
         manual_data = st.session_state['manual_data']
+
         if not manual_data.empty:
             for idx, row in manual_data.iterrows():
-                with st.expander(f"Q&A {idx + 1}"):
-                    edited_question = st.text_input("Question", value=row['question'], key=f"edit_question_{idx}")
-                    edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_answer_{idx}")
+                # 各行に「Edit」ボタンを追加
+                cols = st.columns([8, 2])  # データとボタンの割合を調整
+                with cols[0]:
+                    st.markdown(f"**Question {idx + 1}:** {row['question']}")
+                    st.markdown(f"**Answer:** {row['answer']}")
+                    priority_display = row['priority'] if not pd.isna(row['priority']) else "Not Set"
+                    st.markdown(f"**Priority:** {priority_display}")
+                with cols[1]:
+                    edit_button = st.button("Edit", key=f"edit_button_{idx}")
+                
+                if edit_button:
+                    # 編集フォームを表示
+                    with st.expander(f"Editing Q&A {idx + 1}", expanded=True):
+                        edited_question = st.text_input("Question", value=row['question'], key=f"edit_question_{idx}")
+                        edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_answer_{idx}")
+                        set_edit_priority = st.checkbox("Set priority", key=f"set_edit_priority_checkbox_{idx}")
+                        if set_edit_priority:
+                            edited_priority = st.number_input(
+                                "Priority", 
+                                min_value=1, 
+                                step=1, 
+                                value=int(row['priority']) if not pd.isna(row['priority']) else 2, 
+                                key=f"edit_priority_{idx}"
+                            )
+                        else:
+                            edited_priority = pd.NA  # 未設定の場合はNaN
 
-                    # priority の編集をオプショナルにする
-                    set_edit_priority = st.checkbox("Set priority", key=f"set_edit_priority_{idx}")
-                    if set_edit_priority:
-                        # priority を整数として入力
-                        edited_priority = st.number_input(
-                            "Priority", 
-                            min_value=1, 
-                            step=1, 
-                            value=int(row['priority']) if not pd.isna(row['priority']) else 2, 
-                            key=f"edit_priority_{idx}"
-                        )
-                    else:
-                        edited_priority = pd.NA  # 未設定の場合はNaN
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("Save Changes", key=f"save_{idx}"):
-                            manual_data.at[idx, 'question'] = edited_question
-                            manual_data.at[idx, 'answer'] = edited_answer
-                            manual_data.at[idx, 'priority'] = edited_priority
-                            st.session_state['manual_data'] = manual_data
-                            manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
-                            st.success(f"Q&A {idx + 1} has been updated.")
-                            # Google Drive にアップロード
-                            upload_file_to_drive(drive_service, 'manual.csv', folder_id)
-                    with col2:
-                        if st.button("Delete Q&A", key=f"delete_{idx}"):
-                            manual_data = manual_data.drop(idx).reset_index(drop=True)
-                            st.session_state['manual_data'] = manual_data
-                            manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
-                            st.success(f"Q&A {idx + 1} has been deleted.")
-                            # Google Drive にアップロード
-                            upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("Save Changes", key=f"save_changes_{idx}"):
+                                manual_data.at[idx, 'question'] = edited_question
+                                manual_data.at[idx, 'answer'] = edited_answer
+                                manual_data.at[idx, 'priority'] = edited_priority
+                                st.session_state['manual_data'] = manual_data
+                                manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                                st.success(f"Q&A {idx + 1} has been updated.")
+                                # Google Drive にアップロード
+                                upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+                        with col2:
+                            if st.button("Delete Q&A", key=f"delete_qna_{idx}"):
+                                manual_data = manual_data.drop(idx).reset_index(drop=True)
+                                st.session_state['manual_data'] = manual_data
+                                manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                                st.success(f"Q&A {idx + 1} has been deleted.")
+                                # Google Drive にアップロード
+                                upload_file_to_drive(drive_service, 'manual.csv', folder_id)
         else:
             st.info("No Q&A entries found in manual.csv.")
 
@@ -499,9 +512,67 @@ elif page == "Admin":
             st.info("There is no feedback to display.")
 
         # ---------------------------
-        # Display Current Manual Data
+        # Display Current Manual Data as Editable Table
         # ---------------------------
-        st.markdown("## 📄 Current Manual Data")
+        st.markdown("### 📄 Current Manual Data (Editable)")
+
+        if not st.session_state['manual_data'].empty:
+            manual_data = st.session_state['manual_data'].reset_index(drop=True)
+            for idx, row in manual_data.iterrows():
+                with st.container():
+                    cols = st.columns([1, 5, 5, 2])  # Adjust column widths as needed
+                    with cols[0]:
+                        st.write(f"{idx + 1}")
+                    with cols[1]:
+                        st.markdown(f"**Question:** {row['question']}")
+                    with cols[2]:
+                        st.markdown(f"**Answer:** {row['answer']}")
+                    with cols[3]:
+                        priority_display = row['priority'] if not pd.isna(row['priority']) else "Not Set"
+                        st.markdown(f"**Priority:** {priority_display}")
+                        edit_button = st.button("Edit", key=f"edit_table_{idx}")
+                        if edit_button:
+                            with st.expander(f"Editing Q&A {idx + 1}", expanded=True):
+                                edited_question = st.text_input("Question", value=row['question'], key=f"edit_table_question_{idx}")
+                                edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_table_answer_{idx}")
+                                set_edit_priority = st.checkbox("Set priority", key=f"set_edit_table_priority_checkbox_{idx}")
+                                if set_edit_priority:
+                                    edited_priority = st.number_input(
+                                        "Priority", 
+                                        min_value=1, 
+                                        step=1, 
+                                        value=int(row['priority']) if not pd.isna(row['priority']) else 2, 
+                                        key=f"edit_table_priority_{idx}"
+                                    )
+                                else:
+                                    edited_priority = pd.NA  # 未設定の場合はNaN
+
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    if st.button("Save Changes", key=f"save_table_changes_{idx}"):
+                                        manual_data.at[idx, 'question'] = edited_question
+                                        manual_data.at[idx, 'answer'] = edited_answer
+                                        manual_data.at[idx, 'priority'] = edited_priority
+                                        st.session_state['manual_data'] = manual_data
+                                        manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                                        st.success(f"Q&A {idx + 1} has been updated.")
+                                        # Google Drive にアップロード
+                                        upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+                                with col2:
+                                    if st.button("Delete Q&A", key=f"delete_table_qna_{idx}"):
+                                        manual_data = manual_data.drop(idx).reset_index(drop=True)
+                                        st.session_state['manual_data'] = manual_data
+                                        manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                                        st.success(f"Q&A {idx + 1} has been deleted.")
+                                        # Google Drive にアップロード
+                                        upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+        else:
+            st.info("No data in manual.csv.")
+
+        # ---------------------------
+        # Display Current Manual Data (DataFrame)
+        # ---------------------------
+        st.markdown("## 📄 Current Manual Data (DataFrame View)")
         if not st.session_state['manual_data'].empty:
             st.dataframe(st.session_state['manual_data'])
         else:
