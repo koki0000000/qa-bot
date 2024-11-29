@@ -3,7 +3,6 @@ import openai
 import pandas as pd
 import os
 import json
-import sys
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -197,6 +196,12 @@ def load_manual_data():
     if os.path.exists('manual.csv'):
         try:
             data = pd.read_csv('manual.csv', encoding='utf-8')
+            # 'priority' 列の欠損値を2で埋める（オプショナルにするためにNaNを許容）
+            if 'priority' in data.columns:
+                data['priority'] = pd.to_numeric(data['priority'], errors='coerce').astype('Int64')
+            else:
+                # 'priority' 列がない場合は追加（全てNaN）
+                data['priority'] = pd.Series([pd.NA] * len(data))
             if data.empty:
                 st.error("The manual.csv file is empty. Please add data.")
                 return pd.DataFrame(columns=['question', 'answer', 'priority'])
@@ -281,14 +286,18 @@ if page == "User":
 
     # よくある質問のセクション
     st.markdown("## 📝 Frequently Asked Questions")
-    faq_questions = manual_data[manual_data['priority'] == 1]['question'].tolist()
+    faq_questions = manual_data[manual_data['priority'] == 1]['question'].dropna().tolist()
 
-    # 質問ボタンを表示
-    cols = st.columns(3)
-    for idx, question in enumerate(faq_questions):
-        with cols[idx % 3]:
-            if st.button(question, key=f"faq_{idx}", css_class="question-button"):
-                st.session_state['selected_question'] = question
+    if faq_questions:
+        # 質問ボタンを表示
+        num_columns = 3  # 列数を調整
+        cols = st.columns(num_columns)
+        for idx, question in enumerate(faq_questions):
+            with cols[idx % num_columns]:
+                if st.button(question, key=f"faq_{idx}"):
+                    st.session_state['selected_question'] = question
+    else:
+        st.info("No high priority (priority=1) questions found.")
 
     # 質問入力欄
     if 'selected_question' in st.session_state:
@@ -299,7 +308,7 @@ if page == "User":
     if st.button("Submit"):
         if question:
             # マニュアルの内容をテキストに結合
-            manual_text = "\n".join(manual_data['question'] + "\n" + manual_data['answer'])
+            manual_text = "\n".join(manual_data['question'].fillna('') + "\n" + manual_data['answer'].fillna(''))
 
             # 質問とマニュアルをOpenAIに送り、回答を取得
             try:
@@ -328,7 +337,7 @@ if page == "User":
                 new_feedback = pd.DataFrame([{
                     'question': question,
                     'answer': ai_response,
-                    'feedback': "Not Rated"
+                    'feedback': pd.NA  # 初期値は未評価
                 }])
                 st.session_state['feedback_data'] = pd.concat([st.session_state['feedback_data'], new_feedback], ignore_index=True)
 
@@ -347,34 +356,37 @@ if page == "User":
 
     # 質問履歴の表示
     st.markdown("## 🕘 Question History")
-    for idx, qa in enumerate(reversed(st.session_state['feedback_data'].to_dict('records'))):
-        actual_idx = len(st.session_state['feedback_data']) - idx - 1
-        st.markdown(f"<div class='question'><strong>Question {actual_idx+1}:</strong> {qa['question']}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
+    if not st.session_state['feedback_data'].empty:
+        for idx, qa in enumerate(reversed(st.session_state['feedback_data'].to_dict('records'))):
+            actual_idx = len(st.session_state['feedback_data']) - idx - 1
+            st.markdown(f"<div class='question'><strong>Question {actual_idx+1}:</strong> {qa['question']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='answer'><strong>Answer {actual_idx+1}:</strong> {qa['answer']}</div>", unsafe_allow_html=True)
 
-        if qa['feedback'] == "Not Rated":
-            # フィードバックセクションを回答の直下に配置
-            st.markdown("<div class='feedback-section'>", unsafe_allow_html=True)
-            feedback = st.radio(
-                "Was this answer helpful?",
-                ["Yes", "No"],
-                key=f"feedback_{actual_idx}",
-                index=0
-            )
-            if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
-                st.session_state['feedback_data'].at[actual_idx, 'feedback'] = feedback
-                st.success("Thank you for your feedback!")
+            if pd.isna(qa['feedback']):
+                # フィードバックセクションを回答の直下に配置
+                st.markdown("<div class='feedback-section'>", unsafe_allow_html=True)
+                feedback = st.radio(
+                    "Was this answer helpful?",
+                    ["Yes", "No"],
+                    key=f"feedback_{actual_idx}",
+                    index=0
+                )
+                if st.button("Submit Feedback", key=f"submit_feedback_{actual_idx}"):
+                    st.session_state['feedback_data'].at[actual_idx, 'feedback'] = feedback
+                    st.success("Thank you for your feedback!")
 
-                # 'feedback.csv' のフィードバックを更新
-                def update_feedback():
-                    st.session_state['feedback_data'].to_csv('feedback.csv', index=False, encoding='utf-8')
-                    # Google Drive にアップロード
-                    upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+                    # 'feedback.csv' のフィードバックを更新
+                    def update_feedback():
+                        st.session_state['feedback_data'].to_csv('feedback.csv', index=False, encoding='utf-8')
+                        # Google Drive にアップロード
+                        upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
 
-                update_feedback()
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
+                    update_feedback()
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"**Feedback {actual_idx+1}:** {qa['feedback']}")
+    else:
+        st.info("No questions have been asked yet.")
 
 # -------------------------------
 # Admin Page
@@ -398,13 +410,18 @@ elif page == "Admin":
         with st.expander("Add New Q&A"):
             new_question = st.text_input("Enter a new question")
             new_answer = st.text_area("Enter a new answer")
-            new_priority = st.number_input("Enter priority (1 for high priority)", min_value=1, step=1, value=2)
+            set_priority = st.checkbox("Set priority")
+            if set_priority:
+                new_priority = st.number_input("Enter priority (1 for high priority)", min_value=1, step=1, value=2, key="new_priority")
+            else:
+                new_priority = pd.NA  # 未設定の場合はNaN
+
             if st.button("Add Q&A"):
                 if new_question and new_answer:
                     new_row = pd.DataFrame({
                         'question': [new_question],
                         'answer': [new_answer],
-                        'priority': [int(new_priority)]
+                        'priority': [new_priority]
                     })
                     st.session_state['manual_data'] = pd.concat([st.session_state['manual_data'], new_row], ignore_index=True)
                     st.session_state['manual_data'].to_csv('manual.csv', index=False, encoding='utf-8')
@@ -417,36 +434,47 @@ elif page == "Admin":
         # 既存のQ&Aを編集・削除するセクション
         st.markdown("### Existing Q&A")
         manual_data = st.session_state['manual_data']
-        for idx, row in manual_data.iterrows():
-            with st.expander(f"Q&A {idx + 1}"):
-                edited_question = st.text_input("Question", value=row['question'], key=f"edit_question_{idx}")
-                edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_answer_{idx}")
-                edited_priority = st.number_input(
-                    "Priority", 
-                    min_value=1, 
-                    step=1, 
-                    value=int(row['priority']),  # Cast to int to ensure consistency
-                    key=f"edit_priority_{idx}"
-                )
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Save Changes", key=f"save_{idx}"):
-                        manual_data.at[idx, 'question'] = edited_question
-                        manual_data.at[idx, 'answer'] = edited_answer
-                        manual_data.at[idx, 'priority'] = edited_priority
-                        st.session_state['manual_data'] = manual_data
-                        manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
-                        st.success(f"Q&A {idx + 1} has been updated.")
-                        # Google Drive にアップロード
-                        upload_file_to_drive(drive_service, 'manual.csv', folder_id)
-                with col2:
-                    if st.button("Delete Q&A", key=f"delete_{idx}"):
-                        manual_data = manual_data.drop(idx).reset_index(drop=True)
-                        st.session_state['manual_data'] = manual_data
-                        manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
-                        st.success(f"Q&A {idx + 1} has been deleted.")
-                        # Google Drive にアップロード
-                        upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+        if not manual_data.empty:
+            for idx, row in manual_data.iterrows():
+                with st.expander(f"Q&A {idx + 1}"):
+                    edited_question = st.text_input("Question", value=row['question'], key=f"edit_question_{idx}")
+                    edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_answer_{idx}")
+
+                    # priority の編集をオプショナルにする
+                    set_edit_priority = st.checkbox("Set priority", key=f"set_edit_priority_{idx}")
+                    if set_edit_priority:
+                        # priority を整数として入力
+                        edited_priority = st.number_input(
+                            "Priority", 
+                            min_value=1, 
+                            step=1, 
+                            value=int(row['priority']) if not pd.isna(row['priority']) else 2, 
+                            key=f"edit_priority_{idx}"
+                        )
+                    else:
+                        edited_priority = pd.NA  # 未設定の場合はNaN
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("Save Changes", key=f"save_{idx}"):
+                            manual_data.at[idx, 'question'] = edited_question
+                            manual_data.at[idx, 'answer'] = edited_answer
+                            manual_data.at[idx, 'priority'] = edited_priority
+                            st.session_state['manual_data'] = manual_data
+                            manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                            st.success(f"Q&A {idx + 1} has been updated.")
+                            # Google Drive にアップロード
+                            upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+                    with col2:
+                        if st.button("Delete Q&A", key=f"delete_{idx}"):
+                            manual_data = manual_data.drop(idx).reset_index(drop=True)
+                            st.session_state['manual_data'] = manual_data
+                            manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
+                            st.success(f"Q&A {idx + 1} has been deleted.")
+                            # Google Drive にアップロード
+                            upload_file_to_drive(drive_service, 'manual.csv', folder_id)
+        else:
+            st.info("No Q&A entries found in manual.csv.")
 
         # ---------------------------
         # Manage Feedback.csv
@@ -468,13 +496,16 @@ elif page == "Admin":
                         # Google Drive にアップロード
                         upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
         else:
-            st.warning("There is no feedback to display.")
+            st.info("There is no feedback to display.")
 
         # ---------------------------
         # Display Current Manual Data
         # ---------------------------
         st.markdown("## 📄 Current Manual Data")
-        st.dataframe(st.session_state['manual_data'])
+        if not st.session_state['manual_data'].empty:
+            st.dataframe(st.session_state['manual_data'])
+        else:
+            st.info("No data in manual.csv.")
 
         # ---------------------------
         # Display Current Feedback Data
@@ -505,6 +536,5 @@ elif page == "Admin":
                     st.download_button('Download feedback.csv', f, file_name='feedback.csv')
             except Exception as e:
                 st.error(f"Failed to read feedback.csv for download: {e}")
-
     else:
         st.error("Incorrect password.")
