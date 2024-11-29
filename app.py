@@ -432,7 +432,7 @@ elif page == "Admin":
                     st.warning("Please enter both a question and an answer.")
 
         # ---------------------------
-        # Current Manual Data (DataFrame View) with Edit Buttons
+        # Existing Q&A with Edit Buttons
         # ---------------------------
         st.markdown("### 📄 Current Manual Data (DataFrame View)")
 
@@ -449,7 +449,7 @@ elif page == "Admin":
                     st.markdown(f"**Priority:** {priority_display}")
                 with cols[1]:
                     edit_button = st.button("Edit", key=f"edit_button_{idx}")
-
+                
                 if edit_button:
                     # 編集フォームを表示
                     with st.expander(f"Editing Q&A {idx + 1}", expanded=True):
@@ -497,59 +497,67 @@ elif page == "Admin":
         feedback_data = st.session_state['feedback_data']
         if not feedback_data.empty:
             for idx, row in feedback_data.iterrows():
-                # 各フィードバックに「Edit」ボタンを追加
-                cols = st.columns([7, 1, 2])  # データとボタンの割合を調整
+                # 各フィードバックエントリに「Edit」ボタンを追加
+                cols = st.columns([8, 2])  # データとボタンの割合を調整
                 with cols[0]:
                     st.markdown(f"**Feedback {idx + 1}:**")
                     st.markdown(f"**Question:** {row['question']}")
                     st.markdown(f"**Answer:** {row['answer']}")
-                    feedback_display = row['feedback'] if not pd.isna(row['feedback']) else "Not Rated"
-                    st.markdown(f"**Feedback:** {feedback_display}")
+                    st.markdown(f"**Feedback:** {row['feedback']}")
                 with cols[1]:
-                    edit_feedback_button = st.button("Edit", key=f"edit_feedback_{idx}")
-                with cols[2]:
-                    delete_feedback_button = st.button("Delete", key=f"delete_feedback_{idx}")
-
+                    edit_feedback_button = st.button("Edit", key=f"edit_feedback_button_{idx}")
+                
                 if edit_feedback_button:
                     # 編集フォームを表示
                     with st.expander(f"Editing Feedback {idx + 1}", expanded=True):
-                        feedback_options = ["Yes", "No", "Not Rated"]
                         edited_feedback = st.selectbox(
-                            "Update Feedback",
-                            feedback_options,
-                            index=feedback_options.index(row['feedback']) if row['feedback'] in feedback_options else 2,
-                            key=f"select_feedback_{idx}"
+                            "Feedback",
+                            ["Yes", "No"],
+                            index=0 if row['feedback'] == "Yes" else 1 if row['feedback'] == "No" else 0,
+                            key=f"edit_feedback_{idx}"
                         )
 
-                        if st.button("Save Feedback", key=f"save_feedback_{idx}"):
-                            feedback_data.at[idx, 'feedback'] = edited_feedback
-                            st.session_state['feedback_data'] = feedback_data
-                            feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-                            st.success(f"Feedback {idx + 1} has been updated.")
-                            # Google Drive にアップロード
-                            upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
-
-                if delete_feedback_button:
-                    feedback_data = feedback_data.drop(idx).reset_index(drop=True)
-                    st.session_state['feedback_data'] = feedback_data
-                    feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-                    st.success(f"Feedback {idx + 1} has been deleted.")
-                    # Google Drive にアップロード
-                    upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("Save Feedback", key=f"save_feedback_{idx}"):
+                                feedback_data.at[idx, 'feedback'] = edited_feedback
+                                st.session_state['feedback_data'] = feedback_data
+                                feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
+                                st.success(f"Feedback {idx + 1} has been updated.")
+                                # Google Drive にアップロード
+                                upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+                        with col2:
+                            if st.button("Delete Feedback", key=f"delete_feedback_{idx}"):
+                                feedback_data = feedback_data.drop(idx).reset_index(drop=True)
+                                st.session_state['feedback_data'] = feedback_data
+                                feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
+                                st.success(f"Feedback {idx + 1} has been deleted.")
+                                # Google Drive にアップロード
+                                upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
         else:
             st.info("There is no feedback to display.")
 
         # ---------------------------
         # Display Current Manual Data (DataFrame View)
         # ---------------------------
-        # 既に手動で編集可能なボタンを追加しているため、ここでは不要
-        # ユーザーが要求した「📄 Current Manual Data (DataFrame View)」に編集ボタンを追加している
+        st.markdown("## 📄 Current Manual Data (DataFrame View)")
+        if not st.session_state['manual_data'].empty:
+            st.dataframe(st.session_state['manual_data'])
+        else:
+            st.info("No data in manual.csv.")
 
         # ---------------------------
-        # Display Current Feedback Data (Optional DataFrame View)
+        # Display Current Feedback Data with Edit Buttons
         # ---------------------------
-        # フィードバックのデータフレームビューは必要に応じて保持または削除できます
-        # ここではユーザーが「📊 All Feedback」に編集ボタンを追加することを希望しているため、以下は不要
+        st.markdown("## 📊 All Feedback")
+        if not st.session_state['feedback_data'].empty:
+            st.dataframe(st.session_state['feedback_data'])
+            positive_feedback = st.session_state['feedback_data'][st.session_state['feedback_data']['feedback'] == 'Yes'].shape[0]
+            negative_feedback = st.session_state['feedback_data'][st.session_state['feedback_data']['feedback'] == 'No'].shape[0]
+            st.markdown(f"**Helpful:** {positive_feedback}")
+            st.markdown(f"**Not Helpful:** {negative_feedback}")
+        else:
+            st.warning("There is no feedback yet.")
 
         # ---------------------------
         # Download Files
