@@ -432,7 +432,7 @@ elif page == "Admin":
                     st.warning("Please enter both a question and an answer.")
 
         # ---------------------------
-        # Existing Q&A with Edit Buttons
+        # Current Manual Data (DataFrame View) with Edit Buttons
         # ---------------------------
         st.markdown("### 📄 Current Manual Data (DataFrame View)")
 
@@ -497,7 +497,7 @@ elif page == "Admin":
         feedback_data = st.session_state['feedback_data']
         if not feedback_data.empty:
             for idx, row in feedback_data.iterrows():
-                # 各フィードバックエントリに「Edit」ボタンを追加
+                # 各フィードバックエントリに「Delete」ボタンを追加
                 cols = st.columns([8, 2])  # データとボタンの割合を調整
                 with cols[0]:
                     st.markdown(f"**Feedback {idx + 1}:**")
@@ -505,35 +505,15 @@ elif page == "Admin":
                     st.markdown(f"**Answer:** {row['answer']}")
                     st.markdown(f"**Feedback:** {row['feedback']}")
                 with cols[1]:
-                    edit_feedback_button = st.button("Edit", key=f"edit_feedback_button_{idx}")
+                    delete_feedback_button = st.button("Delete", key=f"delete_feedback_button_{idx}")
                 
-                if edit_feedback_button:
-                    # 編集フォームを表示
-                    with st.expander(f"Editing Feedback {idx + 1}", expanded=True):
-                        edited_feedback = st.selectbox(
-                            "Feedback",
-                            ["Yes", "No"],
-                            index=0 if row['feedback'] == "Yes" else 1 if row['feedback'] == "No" else 0,
-                            key=f"edit_feedback_{idx}"
-                        )
-
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("Save Feedback", key=f"save_feedback_{idx}"):
-                                feedback_data.at[idx, 'feedback'] = edited_feedback
-                                st.session_state['feedback_data'] = feedback_data
-                                feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-                                st.success(f"Feedback {idx + 1} has been updated.")
-                                # Google Drive にアップロード
-                                upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
-                        with col2:
-                            if st.button("Delete Feedback", key=f"delete_feedback_{idx}"):
-                                feedback_data = feedback_data.drop(idx).reset_index(drop=True)
-                                st.session_state['feedback_data'] = feedback_data
-                                feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
-                                st.success(f"Feedback {idx + 1} has been deleted.")
-                                # Google Drive にアップロード
-                                upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
+                if delete_feedback_button:
+                    feedback_data = feedback_data.drop(idx).reset_index(drop=True)
+                    st.session_state['feedback_data'] = feedback_data
+                    feedback_data.to_csv('feedback.csv', index=False, encoding='utf-8')
+                    st.success(f"Feedback {idx + 1} has been deleted.")
+                    # Google Drive にアップロード
+                    upload_file_to_drive(drive_service, 'feedback.csv', folder_id)
         else:
             st.info("There is no feedback to display.")
 
@@ -547,7 +527,7 @@ elif page == "Admin":
             st.info("No data in manual.csv.")
 
         # ---------------------------
-        # Display Current Feedback Data with Edit Buttons
+        # Display Current Feedback Data
         # ---------------------------
         st.markdown("## 📊 All Feedback")
         if not st.session_state['feedback_data'].empty:
