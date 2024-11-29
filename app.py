@@ -444,17 +444,27 @@ elif page == "Admin":
                 cols = st.columns([8, 2])  # データとボタンの割合を調整
                 with cols[0]:
                     st.markdown(f"**Question {idx + 1}:** {row['question']}")
-                    st.markdown(f"**Answer:** {row['answer']}")
+                    # スニペット表示
+                    if len(row['question']) > 100:
+                        display_question = row['question'][:100] + "..."
+                    else:
+                        display_question = row['question']
+                    if len(row['answer']) > 100:
+                        display_answer = row['answer'][:100] + "..."
+                    else:
+                        display_answer = row['answer']
+                    st.markdown(f"**Answer:** {display_answer}")
                     priority_display = row['priority'] if not pd.isna(row['priority']) else "Not Set"
                     st.markdown(f"**Priority:** {priority_display}")
                 with cols[1]:
                     edit_button = st.button("Edit", key=f"edit_button_{idx}")
-                
+
                 if edit_button:
                     # 編集フォームを表示
                     with st.expander(f"Editing Q&A {idx + 1}", expanded=True):
-                        edited_question = st.text_input("Question", value=row['question'], key=f"edit_question_{idx}")
-                        edited_answer = st.text_area("Answer", value=row['answer'], key=f"edit_answer_{idx}")
+                        # フルテキスト表示と編集フィールド
+                        edited_question = st.text_area("Question", value=row['question'], height=100, key=f"edit_question_{idx}")
+                        edited_answer = st.text_area("Answer", value=row['answer'], height=150, key=f"edit_answer_{idx}")
                         set_edit_priority = st.checkbox("Set priority", key=f"set_edit_priority_checkbox_{idx}")
                         if set_edit_priority:
                             edited_priority = st.number_input(
@@ -470,9 +480,11 @@ elif page == "Admin":
                         col1, col2 = st.columns(2)
                         with col1:
                             if st.button("Save Changes", key=f"save_changes_{idx}"):
+                                # データの更新
                                 manual_data.at[idx, 'question'] = edited_question
                                 manual_data.at[idx, 'answer'] = edited_answer
                                 manual_data.at[idx, 'priority'] = edited_priority
+                                # セッションステートとファイルに保存
                                 st.session_state['manual_data'] = manual_data
                                 manual_data.to_csv('manual.csv', index=False, encoding='utf-8')
                                 st.success(f"Q&A {idx + 1} has been updated.")
@@ -506,7 +518,7 @@ elif page == "Admin":
                     st.markdown(f"**Feedback:** {row['feedback']}")
                 with cols[1]:
                     delete_feedback_button = st.button("Delete", key=f"delete_feedback_button_{idx}")
-                
+
                 if delete_feedback_button:
                     feedback_data = feedback_data.drop(idx).reset_index(drop=True)
                     st.session_state['feedback_data'] = feedback_data
@@ -518,7 +530,7 @@ elif page == "Admin":
             st.info("There is no feedback to display.")
 
         # ---------------------------
-        # Display Current Manual Data (DataFrame View)
+        # Display Current Manual Data (DataFrame View) with Edit Buttons
         # ---------------------------
         st.markdown("## 📄 Current Manual Data (DataFrame View)")
         if not st.session_state['manual_data'].empty:
